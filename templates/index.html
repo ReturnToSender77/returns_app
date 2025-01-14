@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload Excel</title>
+  <!-- Link to our external stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    /* Popup styling */
+    .popup {
+      position: absolute;
+      background-color: rgba(255, 255, 255, 0.9);
+      border: 1px solid black;
+      padding: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      display: none;
+      z-index: 1000;
+    }
+    .popup button {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Upload an Excel File</h1>
+  <form method="POST" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".xlsx,.xls" />
+    <button type="submit">Upload</button>
+  </form>
+
+  {% if table_html %}
+    <div class="table-container">
+      {{ table_html|safe }}
+    </div>
+  {% endif %}
+
+  <!-- Inline Popup Element -->
+  <div id="popup" class="popup">
+    <p>This is the popup content!</p>
+    <button onclick="closePopup()">Close</button>
+  </div>
+
+  <script src='../static/js/popup.js'></script>
+</body>
+</html>
