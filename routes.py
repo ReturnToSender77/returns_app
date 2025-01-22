@@ -1,12 +1,14 @@
 from flask import Blueprint, render_template, request
-from models import db
-from utils import extract_data_file  # Suppose we put the extraction logic in utils.py
+from models import db, ReturnsTable
+from extract_data_file import extract_data_file
 
 main_blueprint = Blueprint('main', __name__)
 
 @main_blueprint.route("/")
 def index():
-    return render_template("index.html")
+    # db.session.commit()
+    return render_template("index.html", returns_tables=ReturnsTable.query.all())
+
 
 @main_blueprint.route("/", methods=["POST"])
 def upload_and_display():
@@ -24,7 +26,7 @@ def upload_and_display():
             return render_template("index.html", table_html="<p>Please upload a correct file type. Accepted file types: .xlsx, .xls, .xlsm, or .csv file.</p>")
 
         # Read the file
-        returns_table, df = extract_data_file(uploaded_file, db.session)
+        returns_table, df = extract_data_file(uploaded_file)
 
         # Update the database
         db.session.add(returns_table)

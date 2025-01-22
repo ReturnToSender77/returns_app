@@ -1,63 +1,99 @@
 from flask_sqlalchemy import SQLAlchemy
 
-db = SQLAlchemy()  # Define db here, but don't bind to 'app' yet
+# Instantiate the database
+db = SQLAlchemy()
 
-class Column(db.Model):
-    __tablename__ = 'column'  # you may rename to 'columns' if you like
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String, nullable=False)
-    # Polymorphic discriminator
-    discriminator = db.Column(db.String(50))  
-
-    # Relationship fields
-    cells = db.relationship('Cell', backref='column', lazy=True)
-    returns_table_id = db.Column(db.Integer, db.ForeignKey('returns_table.id'), nullable=False)
-
-    __mapper_args__ = {
-        'polymorphic_on': discriminator,        # Tells SQLAlchemy which field indicates the subclass
-        'polymorphic_identity': 'column',       # Identity for the base class
-        'with_polymorphic': '*'                 # Load all subclasses in queries if needed
-    }
-
-    def __repr__(self):
-        return f"<Column(name={self.name})>"
-    
-class DateColumn(Column):
-    # NOTE: We do NOT specify a separate __tablename__ here 
-    # because single-table inheritance means child rows go in the same table as the parent.
-
-    # Child-specific field
-    acds = db.Column(db.String, nullable=True)
-
-    __mapper_args__ = {
-        'polymorphic_identity': 'datecolumn'  # Unique ID for this subclass
-    }
-
-    def __repr__(self):
-        return f"<DateColumn(name={self.name}, acds={self.acds})>"
-    
+# RELATIONSHIP TABLES
 class ReturnsTable(db.Model):
-    __tablename__ = 'returns_table'  # or 'returns_tables'
+    __tablename__ = 'returns_tables'
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
     
-    # The relationship will store both Column and DateColumn 
-    # because they're in the same polymorphic hierarchy
     columns = db.relationship('Column', backref='returns_table', lazy=True)
 
     def __repr__(self):
         column_names = [column.name for column in self.columns]
         return f"<ReturnsTable(name={self.name}, columns={column_names})>"
 
-class Cell(db.Model):
-    __tablename__ = 'cell'
+# COLUMN TABLES
+class Column(db.Model):
+    __tablename__ = 'columns'
+
     id = db.Column(db.Integer, primary_key=True)
-    value = db.Column(db.PickleType, nullable=True)
-    color = db.Column(db.String(50), nullable=True)
-    format = db.Column(db.String(10), nullable=True)
-    column_id = db.Column(db.Integer, db.ForeignKey('column.id'), nullable=False)
+    name = db.Column(db.String, nullable=False)
+    discriminator = db.Column(db.String(50))  
+
+    cells = db.relationship('BaseCell', backref='column', lazy=True)
+    
+    returns_table_id = db.Column(db.Integer, db.ForeignKey('returns_tables.id'), nullable=False)
+
+    __mapper_args__ = {
+        'polymorphic_on': discriminator,
+        'polymorphic_identity': 'column',
+        'with_polymorphic': '*' # To allow querying of all column types
+    }
 
     def __repr__(self):
-        return f"<Cell(value={self.value}, color={self.color}, format={self.format})>"
+        return f"<Column(name={self.name})>"
+    
+class DateColumn(Column):
+    acds = db.Column(db.String, nullable=True)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'datecolumn'
+    }
+
+    def __repr__(self):
+        return f"<DateColumn(name={self.name}, acds={self.acds})>"
+
+class TextColumn(Column):
+    __mapper_args__ = {
+        'polymorphic_identity': 'textcolumn'
+    }
+    def __repr__(self):
+        return f"<TextColumn(name={self.name})>"
+
+# CELL TABLES
+class BaseCell(db.Model):
+    __tablename__ = 'base_cells'
+    id = db.Column(db.Integer, primary_key=True)
+    color = db.Column(db.String(50))
+    format = db.Column(db.String(10))
+    column_id = db.Column(db.Integer, db.ForeignKey('columns.id'), nullable=False)
+    discriminator = db.Column(db.String(50))
+
+    __mapper_args__ = {
+        'polymorphic_on': discriminator,
+        'polymorphic_identity': 'base_cell'
+    }
+
+class NumberCell(BaseCell):
+    __tablename__ = 'number_cells'
+    id = db.Column(db.Integer, db.ForeignKey('base_cells.id'), primary_key=True)
+
+    value = db.Column(db.Float)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'number_cell'
+    }
+
+class DateCell(BaseCell):
+    __tablename__ = 'date_cells'
+    id = db.Column(db.Integer, db.ForeignKey('base_cells.id'), primary_key=True)
+
+    value = db.Column(db.DateTime)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'date_cell'
+    }
+
+class TextCell(BaseCell):
+    __tablename__ = 'text_cells'
+    id = db.Column(db.Integer, db.ForeignKey('base_cells.id'), primary_key=True)
+
+    value = db.Column(db.String(50))
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'text_cell'
+    }

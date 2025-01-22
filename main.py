@@ -1,7 +1,7 @@
 # from my_flask_app_returns import create_app
 from flask import Flask
 from flask_migrate import Migrate
-from models import db 
+from models import db
 from routes import main_blueprint
 
 def create_app():
@@ -19,6 +19,21 @@ def create_app():
 
     return app
 
+def drop_database_tables(app, database):
+    """ Drop all tables in the database; useful for development
+    Args:
+        app: Flask app instance
+        db: SQLAlchemy db instance
+    """
+    with app.app_context():
+        database.drop_all()
+
+    print("All returns database tables dropped.")
+
+# Create and run app - also reset the database; useful for development
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True)
+    drop_database_tables(app, db)
+    
+        

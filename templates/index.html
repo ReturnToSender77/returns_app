@@ -22,7 +22,14 @@
   </style>
 </head>
 <body>
-
+<div style="position: absolute; top: 20px; right: 20px;">
+  <select id="returnsTableSelect">
+    <option value="">Select Returns Table</option>
+    {% for table in returns_tables %}
+      <option value="{{ table.id }}">{{ table.name }}</option>
+    {% endfor %}
+  </select>
+</div>
   <h1>Upload an Excel File</h1>
   <form method="POST" enctype="multipart/form-data">
     <input type="file" name="file" accept=".xlsx,.xls" />
