@@ -1,14 +1,15 @@
-from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy #import the needed package 
 
 db = SQLAlchemy()  # Define db here, but don't bind to 'app' yet
+#initiates an instance of the SQLAlchemy class
 
 class Column(db.Model):
     __tablename__ = 'column'  # you may rename to 'columns' if you like
 
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String, nullable=False)
+    id = db.Column(db.Integer, primary_key=True) #sets the id as the primary key
+    name = db.Column(db.String, nullable=False) #creates a name fiel that is not nullable
     # Polymorphic discriminator
-    discriminator = db.Column(db.String(50))  
+    discriminator = db.Column(db.String(50))  #stores a value used to determine the subsclass of the col
 
     # Relationship fields
     cells = db.relationship('Cell', backref='column', lazy=True)
