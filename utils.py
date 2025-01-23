@@ -62,3 +62,26 @@ def extract_data_file(file):
 
     return returns_table, df
 
+def convert_table_to_html(returns_table):
+    """Convert a ReturnsTable instance to HTML table format."""
+    # Get all columns
+    columns = returns_table.columns
+    
+    # Create a dictionary to store column data
+    data = {column.name: [] for column in columns}
+    
+    # Find the maximum number of rows
+    max_rows = max(len(column.cells) for column in columns)
+    
+    # Fill in the data
+    for column in columns:
+        cells = column.cells
+        values = [cell.value for cell in cells]
+        # Pad with None if needed
+        values.extend([None] * (max_rows - len(values)))
+        data[column.name] = values
+    
+    # Convert to DataFrame and then to HTML
+    df = pd.DataFrame(data)
+    return df.to_html(index=False)
+

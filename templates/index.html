@@ -19,10 +19,29 @@
     .popup button {
       margin-top: 10px;
     }
+    .debug-info {
+      position: fixed;
+      top: 20px;
+      right: 220px; /* Move debug info to the left of the dropdown */
+      background: #f0f0f0;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .table-select {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1001;
+    }
   </style>
 </head>
 <body>
-<div style="position: absolute; top: 20px; right: 20px;">
+<div class="table-select">
   <select id="returnsTableSelect">
     <option value="">Select Returns Table</option>
     {% for table in returns_tables %}
@@ -30,6 +49,25 @@
     {% endfor %}
   </select>
 </div>
+
+<div class="debug-info">
+  <small>Debug Info:</small>
+  <small>Tables: {{ returns_tables|length if returns_tables else 'None' }}</small>
+  {% if error %}
+    <small style="color: red;">Error: {{ error }}</small>
+  {% endif %}
+  <small>Database Connection: {{ 'OK' if returns_tables is defined else 'Failed' }}</small>
+  {% if returns_tables %}
+    <small>
+      <ul style="margin: 0; padding-left: 15px;">
+      {% for table in returns_tables %}
+        <li>{{ table.id }}: {{ table.name }}</li>
+      {% endfor %}
+      </ul>
+    </small>
+  {% endif %}
+</div>
+
   <h1>Upload an Excel File</h1>
   <form method="POST" enctype="multipart/form-data">
     <input type="file" name="file" accept=".xlsx,.xls" />
@@ -49,5 +87,25 @@
   </div>
 
   <script src='../static/js/popup.js'></script>
+  <script>
+    document.getElementById('returnsTableSelect').addEventListener('change', function() {
+      const tableId = this.value;
+      if (tableId) {
+        fetch(`/get_table/${tableId}`)
+          .then(response => response.json())
+          .then(data => {
+            const container = document.querySelector('.table-container');
+            if (!container) {
+              // Create container if it doesn't exist
+              const newContainer = document.createElement('div');
+              newContainer.className = 'table-container';
+              document.body.appendChild(newContainer);
+            }
+            document.querySelector('.table-container').innerHTML = data.table_html;
+          })
+          .catch(error => console.error('Error:', error));
+      }
+    });
+  </script>
 </body>
 </html>
