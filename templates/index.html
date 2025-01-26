@@ -5,75 +5,53 @@
   <title>Upload Excel</title>
   <!-- Link to our external stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <style>
-    /* Popup styling */
-    .popup {
-      position: absolute;
-      background-color: rgba(255, 255, 255, 0.9);
-      border: 1px solid black;
-      padding: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-      display: none;
-      z-index: 1000;
-    }
-    .popup button {
-      margin-top: 10px;
-    }
-    .debug-info {
-      position: fixed;
-      top: 20px;
-      right: 220px; /* Move debug info to the left of the dropdown */
-      background: #f0f0f0;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 12px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-    
-    .table-select {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 1001;
-    }
-  </style>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
 </head>
 <body>
-<div class="table-select">
-  <select id="returnsTableSelect">
-    <option value="">Select Returns Table</option>
-    {% for table in returns_tables %}
-      <option value="{{ table.id }}">{{ table.name }}</option>
-    {% endfor %}
-  </select>
-</div>
+  <!-- Updated header layout -->
+  <div class="header-controls">
+    <!-- App title on the left -->
+    <h1 class="app-title">Returns App</h1>
+    
+    <!-- Debug info in the middle -->
+    <div class="debug-info">
+      <small>Debug Info:</small>
+      <small>Tables: {{ returns_tables|length if returns_tables else 'None' }}</small>
+      {% if error %}
+        <small style="color: red;">Error: {{ error }}</small>
+      {% endif %}
+      <small>Database Connection: {{ 'OK' if returns_tables is defined else 'Failed' }}</small>
+      {% if returns_tables %}
+        <small>
+          <ul style="margin: 0; padding-left: 15px;">
+          {% for table in returns_tables %}
+            <li>{{ table.id }}: {{ table.name }}</li>
+          {% endfor %}
+          </ul>
+        </small>
+      {% endif %}
+    </div>
+    
+    <!-- Table select on the right -->
+    <div class="table-select">
+      <select id="returnsTableSelect">
+        <option value="">Select Returns Table</option>
+        <option value="upload">Upload New Table...</option>
+        {% for table in returns_tables %}
+          <option value="{{ table.id }}">{{ table.name }}</option>
+        {% endfor %}
+      </select>
+      <input type="file" id="fileInput" style="display: none;" accept=".xlsx,.xls,.csv,.xlsm">
+    </div>
+  </div>
 
-<div class="debug-info">
-  <small>Debug Info:</small>
-  <small>Tables: {{ returns_tables|length if returns_tables else 'None' }}</small>
-  {% if error %}
-    <small style="color: red;">Error: {{ error }}</small>
-  {% endif %}
-  <small>Database Connection: {{ 'OK' if returns_tables is defined else 'Failed' }}</small>
-  {% if returns_tables %}
-    <small>
-      <ul style="margin: 0; padding-left: 15px;">
-      {% for table in returns_tables %}
-        <li>{{ table.id }}: {{ table.name }}</li>
-      {% endfor %}
-      </ul>
-    </small>
-  {% endif %}
-</div>
-
-  <h1>Upload an Excel File</h1>
-  <form method="POST" enctype="multipart/form-data">
-    <input type="file" name="file" accept=".xlsx,.xls" />
-    <button type="submit">Upload</button>
-  </form>
-
+  <!-- Table container -->
   {% if table_html %}
     <div class="table-container">
       {{ table_html|safe }}
@@ -86,26 +64,11 @@
     <button onclick="closePopup()">Close</button>
   </div>
 
-  <script src='../static/js/popup.js'></script>
-  <script>
-    document.getElementById('returnsTableSelect').addEventListener('change', function() {
-      const tableId = this.value;
-      if (tableId) {
-        fetch(`/get_table/${tableId}`)
-          .then(response => response.json())
-          .then(data => {
-            const container = document.querySelector('.table-container');
-            if (!container) {
-              // Create container if it doesn't exist
-              const newContainer = document.createElement('div');
-              newContainer.className = 'table-container';
-              document.body.appendChild(newContainer);
-            }
-            document.querySelector('.table-container').innerHTML = data.table_html;
-          })
-          .catch(error => console.error('Error:', error));
-      }
-    });
-  </script>
+  <!-- Remove the inline <script> that destroys or initializes #returnsTable here -->
+  <!-- Rely on main.js for all DataTable logic -->
+
+  <!-- Load popup.js first, then main.js -->
+  <script src="{{ url_for('static', filename='js/popup.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

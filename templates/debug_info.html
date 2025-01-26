@@ -1,0 +1,15 @@
+<small>Debug Info:</small>
+<small>Tables: {{ returns_tables|length if returns_tables else 'None' }}</small>
+{% if error %}
+  <small style="color: red;">Error: {{ error }}</small>
+{% endif %}
+<small>Database Connection: {{ 'OK' if returns_tables is defined else 'Failed' }}</small>
+{% if returns_tables %}
+  <small>
+    <ul style="margin: 0; padding-left: 15px;">
+    {% for table in returns_tables %}
+      <li>{{ table.id }}: {{ table.name }}</li>
+    {% endfor %}
+    </ul>
+  </small>
+{% endif %}

@@ -16,8 +16,10 @@ table, th, td {
   
   /* Container for the table */
   .table-container {
-    margin-top: 20px;
+    margin: 20px;
+    padding: 0 20px;
     font-family: Arial, sans-serif;
+    width: auto; /* Allow container to fill available space */
   }
   
   td {
@@ -48,4 +50,93 @@ table, th, td {
   
     cursor: pointer;
   }
-  
+
+/* Move inline styling from index.html here: */
+.table-select {
+  position: static; /* Remove fixed positioning */
+  margin-left: 0; /* Remove auto margin */
+  padding-right: 20px;
+  min-width: 200px;
+}
+
+.debug-info {
+  position: static; /* Remove fixed positioning */
+  width: 300px;
+  background: #f0f0f0;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+  max-height: 50px; /* Limit height */
+  overflow-y: auto; /* Add scroll for overflow */
+  margin: 0 20px; /* Add horizontal margin */
+}
+
+.popup {
+  position: absolute;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid black;
+  padding: 10px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  display: none;
+  z-index: 1000;
+}
+
+.popup button {
+  margin-top: 10px;
+}
+
+/* Keep DataTables styling in place. Adjust as needed. */
+
+/* Layout styling */
+body {
+    padding-top: 80px; /* Make room for fixed header area */
+    margin: 0;
+}
+
+.header-controls {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between; /* Changed to space-between */
+    align-items: center;
+    z-index: 1000;
+}
+
+.app-title {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    margin: 0;
+    padding: 0;
+    min-width: 200px; /* Match table-select width */
+}
+
+/* DataTables specific adjustments */
+.dataTables_wrapper {
+    margin: 20px;
+    width: auto !important;
+}
+
+.dataTables_filter {
+    margin-bottom: 1em;
+}
+
+/* Make the table fill the available space */
+#returnsTable {
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+/* Make sure the DataTables controls don't overflow */
+.dataTables_filter,
+.dataTables_length,
+.dt-buttons {
+    margin-bottom: 1em;
+}
