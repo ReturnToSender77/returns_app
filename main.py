@@ -41,7 +41,7 @@ def drop_database_tables(app, database):
 # Create and run app - also reset the database; useful for development
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True)
-    # drop_database_tables(app, db)
+    app.run(debug=True, use_reloader=True)
+    drop_database_tables(app, db)  # Comment out or remove this
 
 

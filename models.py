@@ -10,7 +10,10 @@ class ReturnsTable(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
     
-    columns = db.relationship('Column', backref='returns_table', lazy=True)
+    # Add cascade delete to columns
+    columns = db.relationship('Column', backref='returns_table', 
+                            lazy=True, cascade='all, delete-orphan',
+                            passive_deletes=True)
 
     def __repr__(self):
         column_names = [column.name for column in self.columns]
@@ -24,14 +27,19 @@ class Column(db.Model):
     name = db.Column(db.String, nullable=False)
     discriminator = db.Column(db.String(50))  
 
-    cells = db.relationship('BaseCell', backref='column', lazy=True)
+    # Add cascade delete to cells
+    cells = db.relationship('BaseCell', backref='column', 
+                          lazy=True, cascade='all, delete-orphan',
+                          passive_deletes=True)
     
-    returns_table_id = db.Column(db.Integer, db.ForeignKey('returns_tables.id'), nullable=False)
+    returns_table_id = db.Column(db.Integer, db.ForeignKey('returns_tables.id', 
+                               ondelete='CASCADE'), nullable=False)
 
     __mapper_args__ = {
         'polymorphic_on': discriminator,
         'polymorphic_identity': 'column',
-        'with_polymorphic': '*' # To allow querying of all column types
+        'with_polymorphic': '*', # To allow querying of all column types
+        'confirm_deleted_rows': False
     }
 
     def __repr__(self):
@@ -65,7 +73,8 @@ class BaseCell(db.Model):
 
     __mapper_args__ = {
         'polymorphic_on': discriminator,
-        'polymorphic_identity': 'base_cell'
+        'polymorphic_identity': 'base_cell',
+        'confirm_deleted_rows': False
     }
 
 class NumberCell(BaseCell):
@@ -75,7 +84,8 @@ class NumberCell(BaseCell):
     value = db.Column(db.Float)
 
     __mapper_args__ = {
-        'polymorphic_identity': 'number_cell'
+        'polymorphic_identity': 'number_cell',
+        'confirm_deleted_rows': False
     }
 
 class DateCell(BaseCell):
@@ -85,7 +95,8 @@ class DateCell(BaseCell):
     value = db.Column(db.DateTime)
 
     __mapper_args__ = {
-        'polymorphic_identity': 'date_cell'
+        'polymorphic_identity': 'date_cell',
+        'confirm_deleted_rows': False
     }
 
 class TextCell(BaseCell):
@@ -95,5 +106,6 @@ class TextCell(BaseCell):
     value = db.Column(db.String(50))
 
     __mapper_args__ = {
-        'polymorphic_identity': 'text_cell'
+        'polymorphic_identity': 'text_cell',
+        'confirm_deleted_rows': False
     }
