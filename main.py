@@ -4,7 +4,7 @@ from models import db, ReturnsTable  # Add ReturnsTable import
 from routes import main_blueprint
 
 def create_app():
-    print("Starting application creation...")  # Debug print
+    print("Starting application creation...")  
     app = Flask(__name__)
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///returns.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -13,18 +13,18 @@ def create_app():
     Migrate(app, db)
 
     with app.app_context():
-        print("Creating database tables...")  # Debug print
+        print("Creating database tables...")  
         db.create_all()
-        print("Database initialized")  # Debug print
+        print("Database initialized")  
         
         # Check if tables exist
         tables = ReturnsTable.query.all()
-        print(f"Found {len(tables)} existing tables")  # Debug print
+        print(f"Found {len(tables)} existing tables")  
         for table in tables:
-            print(f"Table ID: {table.id}, Name: {table.name}")  # Debug print
+            print(f"Table ID: {table.id}, Name: {table.name}")  
 
     app.register_blueprint(main_blueprint)
-    print("Application creation completed")  # Debug print
+    print("Application creation completed")  
     return app
 
 def drop_database_tables(app, database):

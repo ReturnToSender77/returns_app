@@ -1,27 +1,37 @@
+
+// Wait for the document to be fully loaded before initializing
 $(document).ready(function() {
-  // If a table is initially rendered, call initDataTable once
+  // Initialize DataTable if a table exists on page load
   if (document.querySelector('#returnsTable')) {
     initDataTable();
   }
 });
 
+/**
+ * Initializes or reinitializes the DataTable with custom configuration
+ * Destroys existing instance if it exists to prevent duplicates
+ */
 function initDataTable() {
+  // Clean up existing DataTable instance if present
   if ($.fn.DataTable.isDataTable('#returnsTable')) {
     $('#returnsTable').DataTable().destroy();
   }
+  // Configure and initialize new DataTable
   $('#returnsTable').DataTable({
-    paging: true,
-    pageLength: 10,
-    searching: true,
-    ordering: true,
-    scrollX: true,
-    dom: 'Bfrtip',
-    buttons: ['copy','csv','excel','print'],
+    paging: true,          // Enable pagination
+    pageLength: 10,        // Show 10 rows per page
+    searching: true,       // Enable search functionality
+    ordering: true,        // Enable column sorting
+    scrollX: true,         // Enable horizontal scrolling
+    dom: 'Bfrtip',        // Layout with buttons
+    buttons: ['copy','csv','excel','print'], // Export options
+    // Attach popup listeners after table initialization
     initComplete: function(settings, json) {
       if (window.attachPopupListeners) {
         window.attachPopupListeners();
       }
     },
+    // Attach popup listeners after table redraws
     drawCallback: function(settings) {
       if (window.attachPopupListeners) {
         window.attachPopupListeners();
@@ -30,13 +40,18 @@ function initDataTable() {
   });
 }
 
+/**
+ * Sets up event listeners for ReturnsTable selection and file uploads
+ */
 function attachEventListeners() {
   document.getElementById('returnsTableSelect').addEventListener('change', function() {
     const tableId = this.value;
     if (tableId === 'upload') {
+      // Trigger file input when upload option is selected
       document.getElementById('fileInput').click();
       this.selectedIndex = 0;
     } else if (tableId) {
+      // Fetch and display selected table data
       fetch(`/get_table/${tableId}`)
         .then(response => response.json())
         .then(data => {
@@ -48,11 +63,13 @@ function attachEventListeners() {
     }
   });
 
+  // Handle file upload events
   document.getElementById('fileInput').addEventListener('change', function(e) {
     if (this.files.length > 0) {
       const formData = new FormData();
       formData.append('file', this.files[0]);
       
+      // Send file to server for processing
       fetch('/', {
         method: 'POST',
         body: formData

@@ -1,24 +1,20 @@
 from flask import Blueprint, render_template, request, jsonify
 from models import db, ReturnsTable
-from utils import extract_data_file, convert_table_to_html
-import logging
+from utils import extract_data_file, convert_ReturnsTable_to_html
 
 main_blueprint = Blueprint('main', __name__)
 
 @main_blueprint.route("/")
 def index():
-    try:
-        tables = ReturnsTable.query.all()
-        table_html = ""
-        if tables:
-            # Render the first existing table as a DataTable
-            first_table = tables[0]
-            db.session.refresh(first_table)
-            table_html = convert_table_to_html(first_table)
-        
-        return render_template("index.html", returns_tables=tables, table_html=table_html)
-    except Exception as e:
-        return render_template("index.html", error=str(e))
+    tables = ReturnsTable.query.all()
+    table_html = ""
+    if tables:
+        # Render the first existing table as a DataTable
+        first_table = tables[0]
+        db.session.refresh(first_table)
+        table_html = convert_ReturnsTable_to_html(first_table)
+    
+    return render_template("index.html", returns_tables=tables, table_html=table_html)
 
 @main_blueprint.route("/get_table/<int:table_id>")
 def get_table(table_id):
@@ -30,7 +26,7 @@ def get_table(table_id):
         
         # Use a fresh session to ensure we get the latest data
         db.session.refresh(returns_table)
-        table_html = convert_table_to_html(returns_table)
+        table_html = convert_ReturnsTable_to_html(returns_table)
         return jsonify({'table_html': table_html})
     except Exception as e:
         print(f"Error getting table {table_id}: {str(e)}")
@@ -55,14 +51,14 @@ def upload_and_display():
             db.session.begin()
             
             # Get the returns table and dataframe
-            returns_table, df = extract_data_file(uploaded_file)
+            returns_table, df = extract_data_file(uploaded_file, db)
             
             # Ensure the returns_table is attached to the current session
             returns_table = db.session.merge(returns_table)
             
             print(f"Created new table: ID={returns_table.id}, Name={returns_table.name}")
             # Instead of df.to_html(...), unify the final HTML structure:
-            table_html = convert_table_to_html(returns_table)
+            table_html = convert_ReturnsTable_to_html(returns_table)
             
             # Get fresh list of tables
             tables = ReturnsTable.query.all()
