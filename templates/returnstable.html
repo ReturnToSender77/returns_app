@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Upload Excel{% endblock %}
+{% block content %}
+  <!-- Home tab content: Inline table selector and file input -->
+  <div class="table-select">
+    <select class="returnsTableSelector" id="returnsTableSelect">
+      <option value="">Select Returns Table</option>
+      <option value="upload">Upload New Table...</option>
+      {% for table in returns_tables %}
+        <option value="{{ table.id }}">
+          {{ table.name }} — {{ table.upload_time.strftime('%Y-%m-%d %H:%M:%S') if table.upload_time else 'N/A' }}
+        </option>
+      {% endfor %}
+    </select>
+    <!-- Hidden file input for uploading a new table -->
+    <input type="file" class="fileInput" id="fileInput" 
+           style="width: 1px; height: 1px; opacity: 0; position: absolute; left: 0; top: 0;" 
+           accept=".xlsx,.xls,.csv,.xlsm">
+  </div>
+
+  <!-- Table container -->
+  {% if table_html %}
+    <div class="table-container">
+      {{ table_html|safe }}
+    </div>
+  {% endif %}
+{% endblock %}
+{% block scripts %}
+  <!-- Load additional scripts -->
+  <script src="{{ url_for('static', filename='js/popup.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/returnstable.js') }}"></script>
+{% endblock %}

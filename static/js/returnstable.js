@@ -1,4 +1,3 @@
-
 // Wait for the document to be fully loaded before initializing
 $(document).ready(function() {
   // Initialize DataTable if a table exists on page load
@@ -50,6 +49,12 @@ function attachEventListeners() {
       // Trigger file input when upload option is selected
       document.getElementById('fileInput').click();
       this.selectedIndex = 0;
+    } else if (tableId.startsWith('delete_')) {
+      const id = tableId.replace('delete_', '');
+      fetch(`/drop_table/${id}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(() => location.reload())
+        .catch(e => console.error('Delete error:', e));
     } else if (tableId) {
       // Fetch and display selected table data
       fetch(`/get_table/${tableId}`)
@@ -88,9 +93,12 @@ function attachEventListeners() {
 
         // Update dropdown menu without replacing the entire document
         updateDropdownOptions(data.tables);
+        if (data.selected_table_id) {
+          document.getElementById('returnsTableSelect').value = data.selected_table_id;
+        }
 
-        // Update debug info
-        const debugInfo = document.querySelector('.debug-info');
+        // Updated debug info update: use id instead of class selector.
+        const debugInfo = document.getElementById('debugDropdown');
         if (debugInfo && data.debug_info_html) {
           debugInfo.innerHTML = data.debug_info_html;
         }

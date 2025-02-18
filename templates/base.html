@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}Returns App{% endblock %}</title>
+  <!-- ...existing stylesheet and script links... -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css" />
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+  <style>
+    /* Common header styling */
+    .header-controls { 
+      display: flex; 
+      flex-wrap: wrap; 
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px;
+      border-bottom: 1px solid #ccc;
+    }
+    .app-title { margin: 0; }
+    .tab-header {
+      margin: 10px;
+      border-bottom: 1px solid #ccc;
+    }
+    .tab-button {
+      padding: 8px 16px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-size: 16px;
+    }
+    .tab-button.active {
+      font-weight: bold;
+      border-bottom: 2px solid blue;
+    }
+    /* Debug toggle styling */
+    #debugToggle { margin-left: 20px; padding: 4px 8px; font-size: 12px; }
+    #debugDropdown { display: none; margin-top: 5px; }
+    .main-content { margin-top: 20px; padding: 10px; }
+    /* Example: make the entire option text smaller in the selector */
+    .returnsTableSelector {
+      font-size: 14px;
+    }
+    /* For more advanced styling, consider a custom select plugin */
+    .table-select {
+      position: relative;
+    }
+    /* Example: position a note at the top-right corner of the container */
+    .upload-time-note {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 10px;
+      color: gray;
+    }
+  </style>
+</head>
+<body>
+  <!-- Common Header Area -->
+  <div class="header-controls">
+    <div>
+      <h1 class="app-title">Returns App</h1>
+    </div>
+    <div style="display: flex; align-items: center;">
+      <div class="tab-header">
+        <button class="tab-button" id="homeTab" data-tab="home">Home</button>
+        <button class="tab-button" id="chronTab" data-tab="chron">Chron</button>
+      </div>
+      <button id="debugToggle">Debug</button>
+    </div>
+  </div>
+  <!-- Hidden Debug Info Container -->
+  <div id="debugDropdown">
+    {% include 'debug_info.html' %}
+  </div>
+  <!-- Main content from child templates -->
+  <div class="main-content">
+    {% block content %}{% endblock %}
+  </div>
+
+  <script>
+    // Updated toggle debug info using getComputedStyle for reliable checking
+    document.getElementById('debugToggle').addEventListener('click', function(){
+      const debugDiv = document.getElementById('debugDropdown');
+      const currentDisplay = window.getComputedStyle(debugDiv).display;
+      debugDiv.style.display = currentDisplay === "none" ? "block" : "none";
+    });
+    // Header navigation that works uniformly
+    document.getElementById('homeTab').addEventListener('click', function(){
+      window.location.href = "/";
+    });
+    document.getElementById('chronTab').addEventListener('click', function(){
+      window.location.href = "/chron";
+    });
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

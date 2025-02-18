@@ -35,13 +35,6 @@ def extract_data_file(file, database) -> tuple[ReturnsTable, pd.DataFrame]:
     try:
         filename = file.filename
         
-        # Check if a table with this name already exists
-        existing_table = ReturnsTable.query.filter_by(name=filename).first()
-        if existing_table:
-            print(f"Deleting existing table: {filename}")
-            database.session.delete(existing_table)
-            database.session.flush()
-
         # Read the file into a DataFrame
         if filename.endswith('.csv'):
             df = pd.read_csv(file, na_values=['NA','N/A','na','n/a'])

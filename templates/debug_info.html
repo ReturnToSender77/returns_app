@@ -8,7 +8,7 @@
   <small>
     <ul style="margin: 0; padding-left: 15px;">
     {% for table in returns_tables %}
-      <li>{{ table.id }}: {{ table.name }}</li>
+      <li>{{ table.id }}: {{ table.name }} - Uploaded: {{ table.upload_time.strftime('%Y-%m-%d %H:%M:%S') if table.upload_time else 'N/A' }}</li>
     {% endfor %}
     </ul>
   </small>
