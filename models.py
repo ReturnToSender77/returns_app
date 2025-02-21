@@ -1,24 +1,22 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime  # Add datetime import
+from datetime import datetime
 
 # Instantiate the database
 db = SQLAlchemy()
 
-# RELATIONSHIP TABLES
 class ReturnsTable(db.Model):
     __tablename__ = 'returns_tables'
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
     upload_time = db.Column(db.DateTime, default=datetime.utcnow)  # New field to store upload time
-    # factiva_file field is deprecated for factiva uploads
-    # factiva_file = db.Column(db.String, nullable=True)  # New field to store Factiva HTML file path
     
-    # Add cascade delete to columns
+    # Note cascade delete to columns
     columns = db.relationship('Column', backref='returns_table', 
                             lazy=True, cascade='all, delete-orphan',
                             passive_deletes=True)
-    # New relationship for Factiva articles
+    
+    # Factiva articles relationship
     factiva_articles = db.relationship('FactivaArticle', backref='returns_table',
                                        lazy=True, cascade='all, delete-orphan')
 
@@ -26,7 +24,6 @@ class ReturnsTable(db.Model):
         column_names = [column.name for column in self.columns]
         return f"<ReturnsTable(name={self.name}, columns={column_names})>"
 
-# New model for Factiva articles
 class FactivaArticle(db.Model):
     __tablename__ = 'factiva_articles'
     
@@ -72,14 +69,12 @@ class Column(db.Model):
         return f"<Column(name={self.name})>"
     
 class DateColumn(Column):
-    acds = db.Column(db.String, nullable=True)
-
     __mapper_args__ = {
         'polymorphic_identity': 'datecolumn'
     }
 
     def __repr__(self):
-        return f"<DateColumn(name={self.name}, acds={self.acds})>"
+        return f"<DateColumn(name={self.name})>"
 
 class TextColumn(Column):
     __mapper_args__ = {
@@ -119,6 +114,7 @@ class DateCell(BaseCell):
     id = db.Column(db.Integer, db.ForeignKey('base_cells.id'), primary_key=True)
 
     value = db.Column(db.DateTime)
+    acd = db.Column(db.Integer, default=0)  # 1 indicates an alleged corrective disclosure; 0 otherwise
 
     __mapper_args__ = {
         'polymorphic_identity': 'date_cell',

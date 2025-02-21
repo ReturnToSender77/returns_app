@@ -93,44 +93,33 @@ def extract_data_file(file, database) -> tuple[ReturnsTable, pd.DataFrame]:
         raise
 
 def convert_ReturnsTable_to_html(returns_table):
-    """Convert a ReturnsTable instance to HTML table format."""
-    # Get all columns and verify they exist and have cells
-    columns = list(returns_table.columns)  # Convert to list to force load
+    # Include the table name in a data attribute on the table tag
+    html = f"<table id='returnsTable' class='display' data-table-name='{returns_table.name}'>"
+    html += "<thead><tr>"
+    for col in returns_table.columns:
+        html += f"<th>{col.name}</th>"
+    html += "</tr></thead><tbody>"
     
-    # Handle empty table
-    if not columns:
-        return '<table id="returnsTable" class="display"><thead><tr><th>No data available</th></tr></thead><tbody><tr><td>This table is empty</td></tr></tbody></table>'
-    
-    # Check if all columns have zero cells
-    if all(len(col.cells) == 0 for col in columns):
-        return '<table id="returnsTable" class="display"><thead><tr><th>No data available</th></tr></thead><tbody><tr><td>This table has no data</td></tr></tbody></table>'
-    
-    # Create a dictionary to store column data
-    data = {column.name: [] for column in columns}
-    
-    # Fill in the data
-    for column in columns:
-        cells = list(column.cells)  # Convert to list to force load
-        values = [cell.value for cell in cells if cell is not None]
-        data[column.name] = values
-    
-    # Convert to DataFrame and then to HTML
-    df = pd.DataFrame(data)
-    if df.empty:
-        return '<table id="returnsTable" class="display"><thead><tr><th>No data available</th></tr></thead><tbody><tr><td>No data found</td></tr></tbody></table>'
-    
-    html = df.to_html(
-        index=False,
-        table_id='returnsTable',
-        classes=['display'],
-        na_rep='N/A',   # Display None as "N/A"
-        header=True
-    )
-    
-    # Ensure thead is present (html tag for DataTable) 
-    if '<thead>' not in html:
-        html = html.replace('<tr>', '<thead><tr>', 1)
-        html = html.replace('</tr>', '</tr></thead>', 1)
-    
+    if returns_table.columns:
+        num_rows = len(returns_table.columns[0].cells)
+        for i in range(num_rows):
+            has_acd = False
+            row_cells = []
+            for col in returns_table.columns:
+                cell = col.cells[i]
+                if cell.discriminator == "date_cell":
+                    if cell.acd == 1:
+                        has_acd = True
+                    cell_html = (
+                        f"<td data-cell-type='date' data-cell-id='{cell.id}' data-acd='{cell.acd}'>"
+                        f"{cell.value.strftime('%Y-%m-%d') if cell.value else ''}"
+                        "</td>"
+                    )
+                else:
+                    cell_html = f"<td>{cell.value}</td>"
+                row_cells.append(cell_html)
+            row_class = " class='acd-row'" if has_acd else ""
+            html += f"<tr{row_class}>" + "".join(row_cells) + "</tr>"
+    html += "</tbody></table>"
     return html
 

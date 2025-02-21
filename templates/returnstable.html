@@ -19,11 +19,11 @@
   </div>
 
   <!-- Table container -->
-  {% if table_html %}
-    <div class="table-container">
-      {{ table_html|safe }}
-    </div>
-  {% endif %}
+  <div class="table-container">
+    {{ table_html|safe }}
+  </div>
+  <!-- Custom footer for table info (always rendered) -->
+  <div id="customFooter" style="margin: 10px; font-weight: bold;"></div>
 {% endblock %}
 {% block scripts %}
   <!-- Load additional scripts -->

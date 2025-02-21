@@ -48,14 +48,18 @@
 {% endblock %}
 {% block scripts %}
   <script>
-    // When a ReturnsTable is selected, update the hidden field and fetch its columns
+    // When a ReturnsTable is selected, update the hidden field, fetch columns and factiva articles
     document.getElementById('returnsTableSelectChron').addEventListener('change', function(){
       const tableId = this.value;
       document.getElementById('returnsTableId').value = tableId || "";
+      
       if(!tableId) {
         document.getElementById('columnSelect').innerHTML = '<option value="" disabled selected>Select Column</option>';
+        document.getElementById('factivaArticlesList').innerHTML = '<li>No Factiva articles uploaded.</li>';
         return;
       }
+      
+      // Fetch columns as before
       fetch(`/get_columns/${tableId}`)
         .then(res => res.json())
         .then(data => {
@@ -70,12 +74,29 @@
           });
         })
         .catch(err => console.error(err));
+      
+      // Fetch factiva articles for the selected table
+      fetch(`/get_factiva_articles/${tableId}`)
+        .then(res => res.json())
+        .then(data => {
+          const ul = document.getElementById('factivaArticlesList');
+          if(data.error) {
+            ul.innerHTML = `<li>Error: ${data.error}</li>`;
+            return;
+          }
+          ul.innerHTML = '';
+          if(data.factiva_articles && data.factiva_articles.length > 0) {
+            data.factiva_articles.forEach(article => {
+              const li = document.createElement('li');
+              li.textContent = `${article.headline} by ${article.author}`;
+              ul.appendChild(li);
+            });
+          } else {
+            ul.innerHTML = '<li>No Factiva articles uploaded.</li>';
+          }
+        })
+        .catch(err => console.error(err));
     });
-
-    // File input code removed since there's no upload option in selector
-    
-    // Helper to update dropdown options on Chron page (upload code omitted)
-    // (No need to update dropdown options since the selector is not dynamic here)
 
     // Column "Show Column" handling remains unchanged
     document.getElementById('showColumn').addEventListener('click', function(){
@@ -102,6 +123,7 @@
             return;
           }
           alert(data.message);
+          // Update the factiva articles list using updated data from POST response
           const ul = document.getElementById('factivaArticlesList');
           ul.innerHTML = '';
           data.factiva_articles.forEach(article => {

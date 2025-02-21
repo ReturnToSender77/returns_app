@@ -1,24 +1,14 @@
 from flask import Blueprint, render_template, request, jsonify
-import os
-from datetime import datetime
-from models import db, ReturnsTable, Column, FactivaArticle  # Import Column for the new route
+from models import db, ReturnsTable, Column, DateCell  # Import Column for the new route
 from utils import extract_data_file, convert_ReturnsTable_to_html
-from parse_html_articles import parse_html_articles
 
 main_blueprint = Blueprint('main', __name__)
 
 @main_blueprint.route("/")
 def index():
     tables = ReturnsTable.query.all()
-    table_html = ""
-    if tables:
-        # Render the first existing table as a DataTable
-        first_table = tables[0]
-        db.session.refresh(first_table)
-        table_html = convert_ReturnsTable_to_html(first_table)
-    
-    # Updated template name from "index.html" to "returnstable.html"
-    return render_template("returnstable.html", returns_tables=tables, table_html=table_html)
+    # Remove default table HTML so the client-side can load the saved table if any.
+    return render_template("returnstable.html", returns_tables=tables, table_html="")
 
 @main_blueprint.route("/get_table/<int:table_id>")
 def get_table(table_id):
@@ -108,6 +98,12 @@ def upload_and_display():
     # Updated template name from "index.html" to "returnstable.html"
     return render_template("returnstable.html", returns_tables=tables)
 
+@main_blueprint.route("/chron")
+def chron():
+    columns = Column.query.all()
+    returns_tables = ReturnsTable.query.all()  # Pass returns_tables for debug info
+    return render_template("chron.html", columns=columns, returns_tables=returns_tables)
+
 @main_blueprint.route("/get_column/<int:col_id>")
 def get_column(col_id):
     try:
@@ -129,76 +125,22 @@ def get_columns(table_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@main_blueprint.route("/chron", methods=["GET", "POST"])
-def chron():
-    if request.method == "POST":
-        try:
-            # Use selected ReturnsTable ID provided from the form
-            parent_id = request.form.get("returns_table_id")
-            if not parent_id:
-                return jsonify({'error': "No ReturnsTable selected for linking factiva articles."}), 400
-            returns_table = ReturnsTable.query.get(parent_id)
-            if not returns_table:
-                return jsonify({'error': "Selected ReturnsTable does not exist."}), 400
+@main_blueprint.route("/update_datecell_acd", methods=["POST"])
+def update_datecell_acd():
+    try:
+        data = request.get_json()
+        cell_id = data.get("cell_id")
+        acd_value = data.get("acd")
+        if cell_id is None or acd_value is None:
+            return jsonify({"error": "Missing cell_id or acd value"}), 400
 
-            factiva_files = request.files.getlist('factiva_files')
-            if not factiva_files or all(f.filename == '' for f in factiva_files):
-                return jsonify({'error': "No files selected."}), 400
+        date_cell = db.session.query(DateCell).get(cell_id)
+        if not date_cell:
+            return jsonify({"error": "DateCell not found"}), 404
 
-            upload_folder = os.path.join(os.getcwd(), "uploads", "factiva")
-            os.makedirs(upload_folder, exist_ok=True)
-            uploaded_paths = []
-
-            for factiva_file in factiva_files:
-                if not factiva_file.filename.endswith('.html'):
-                    continue  # Skip non-html files
-                file_path = os.path.join(upload_folder, factiva_file.filename)
-                factiva_file.save(file_path)
-                uploaded_paths.append(file_path)
-                
-                # Parse articles from the saved file and attach them to the selected ReturnsTable
-                articles_data = parse_html_articles(file_path)
-                for article in articles_data:
-                    new_article = FactivaArticle(
-                        returns_table_id=returns_table.id,
-                        article_id=article["id"],
-                        headline=article["headline"],
-                        author=article["author"],
-                        word_count=article["word_count"],
-                        publish_date=article["publish_date"],
-                        source=article["source"],
-                        content=article["content"]
-                    )
-                    db.session.add(new_article)
-            if not uploaded_paths:
-                return jsonify({'error': "No valid HTML files uploaded."}), 400
-
-            db.session.commit()
-
-            articles = FactivaArticle.query.filter_by(returns_table_id=returns_table.id)\
-                                            .order_by(FactivaArticle.id.asc()).all()
-            serialized = [{
-                'headline': art.headline,
-                'author': art.author,
-                'word_count': art.word_count,
-                'publish_date': art.publish_date,
-                'source': art.source
-            } for art in articles]
-
-            return jsonify({
-                'message': "Factiva articles uploaded.",
-                'factiva_articles': serialized
-            })
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({'error': str(e)}), 500
-
-    # GET: Render Chron page normally
-    columns = Column.query.all()
-    returns_tables = ReturnsTable.query.all()  # Existing ReturnsTables
-    # Query Factiva articles from all Factiva uploads
-    factiva_articles = FactivaArticle.query.order_by(FactivaArticle.id.asc()).all()
-    return render_template("chron.html",
-                           columns=columns,
-                           returns_tables=returns_tables,
-                           factiva_articles=factiva_articles)
+        date_cell.acd = int(acd_value)
+        db.session.commit()
+        return jsonify({"message": "ACD updated successfully", "acd": date_cell.acd})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500

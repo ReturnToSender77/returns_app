@@ -82,7 +82,14 @@
   <div class="main-content">
     {% block content %}{% endblock %}
   </div>
+  <!-- Add popup container -->
+  <div id="popup" style="display: none; position: absolute; background: #fff; border: 1px solid #ccc; padding: 10px; z-index: 1000;">
+    <!-- Popup content will be inserted dynamically -->
+    <button onclick="closePopup()">Close</button>
+    <div id="popupContent"></div>
+  </div>
 
+  <script src="{{ url_for('static', filename='js/popup.js') }}"></script>
   <script>
     // Updated toggle debug info using getComputedStyle for reliable checking
     document.getElementById('debugToggle').addEventListener('click', function(){

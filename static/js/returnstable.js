@@ -1,50 +1,104 @@
 // Wait for the document to be fully loaded before initializing
 $(document).ready(function() {
-  // Initialize DataTable if a table exists on page load
-  if (document.querySelector('#returnsTable')) {
+  // If a previously selected table exists in localStorage, load it.
+  const savedTableId = localStorage.getItem('selectedReturnsTable');
+  if (savedTableId && savedTableId !== "upload") {
+    fetch(`/get_table/${savedTableId}`)
+      .then(response => response.json())
+      .then(data => {
+        const container = document.querySelector('.table-container') || createTableContainer();
+        container.innerHTML = data.table_html;
+        initDataTable();
+        document.getElementById('returnsTableSelect').value = savedTableId;
+      })
+      .catch(error => console.error('Error loading saved table:', error));
+  }
+  // Otherwise, if a table exists on page load, initialize DataTable.
+  else if (document.querySelector('#returnsTable')) {
     initDataTable();
   }
+  attachEventListeners();
 });
 
 /**
  * Initializes or reinitializes the DataTable with custom configuration
- * Destroys existing instance if it exists to prevent duplicates
  */
 function initDataTable() {
-  // Clean up existing DataTable instance if present
-  if ($.fn.DataTable.isDataTable('#returnsTable')) {
-    $('#returnsTable').DataTable().destroy();
-  }
-  // Configure and initialize new DataTable
   $('#returnsTable').DataTable({
-    paging: true,          // Enable pagination
-    pageLength: 10,        // Show 10 rows per page
-    searching: true,       // Enable search functionality
-    ordering: true,        // Enable column sorting
-    scrollX: true,         // Enable horizontal scrolling
-    dom: 'Bfrtip',        // Layout with buttons
-    buttons: ['copy','csv','excel','print'], // Export options
-    // Attach popup listeners after table initialization
+    destroy: true,
+    paging: false,            // One page only
+    scrollY: "1200px",        // Set ReturnsTable height
+    scrollCollapse: true,     
+    searching: true,
+    ordering: true,
+    scrollX: true,
+    dom: 'Bfrtip',
+    buttons: ['copy', 'csv', 'excel', 'print'],
+    info: false, // Hide default info
+    rowCallback: function(row, data, index) {
+      if ($(row).find("td[data-acd='1']").length > 0) {
+        $(row).addClass('acd-row');
+      }
+    },
     initComplete: function(settings, json) {
       if (window.attachPopupListeners) {
         window.attachPopupListeners();
       }
+      applyACDRowStyles();
+      updateCustomFooter();
     },
-    // Attach popup listeners after table redraws
     drawCallback: function(settings) {
       if (window.attachPopupListeners) {
         window.attachPopupListeners();
+      }      
+    }
+  });
+}
+
+// New function to update the custom footer
+function updateCustomFooter() {
+  const footerEl = document.getElementById('customFooter');
+  if (!footerEl) return; // No footer defined
+  const tableEl = document.getElementById('returnsTable');
+  const tableName = tableEl ? tableEl.dataset.tableName || "Returns" : "Returns";
+  let dates = [];
+  $('#returnsTable tbody tr').each(function() {
+    const cellText = $(this).find('td[data-cell-type="date"]').first().text();
+    if (cellText) {
+      let d = new Date(cellText);
+      if (!isNaN(d.getTime())) {
+        dates.push(d);
       }
     }
   });
+  if (dates.length > 0) {
+    const minDate = new Date(Math.min(...dates));
+    const maxDate = new Date(Math.max(...dates));
+    const formatDate = function(date) {
+      const m = (date.getMonth() + 1).toString().padStart(2, '0');
+      const d = date.getDate().toString().padStart(2, '0');
+      return `${m}/${d}/${date.getFullYear()}`;
+    };
+    footerEl.innerText = `Showing ${tableName} returns from ${formatDate(minDate)} to ${formatDate(maxDate)}`;
+  } else {
+    footerEl.innerText = `Showing ${tableName} returns (no date data)`;
+  }
 }
 
 /**
  * Sets up event listeners for ReturnsTable selection and file uploads
  */
 function attachEventListeners() {
+  const fileInput = document.getElementById('fileInput');
+  // Remove any previous file upload handler before adding our new one.
+  fileInput.removeEventListener('change', fileUploadHandler);
+  fileInput.addEventListener('change', fileUploadHandler);
+
   document.getElementById('returnsTableSelect').addEventListener('change', function() {
     const tableId = this.value;
+    // Save selection in localStorage
+    localStorage.setItem('selectedReturnsTable', tableId);
+    
     if (tableId === 'upload') {
       // Trigger file input when upload option is selected
       document.getElementById('fileInput').click();
@@ -65,51 +119,6 @@ function attachEventListeners() {
           initDataTable();
         })
         .catch(error => console.error('Error:', error));
-    }
-  });
-
-  // Handle file upload events
-  document.getElementById('fileInput').addEventListener('change', function(e) {
-    if (this.files.length > 0) {
-      const formData = new FormData();
-      formData.append('file', this.files[0]);
-      
-      // Send file to server for processing
-      fetch('/', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.error) {
-          console.error('Upload error:', data.error);
-          alert(data.error);
-          return;
-        }
-
-        // Update table content
-        const container = document.querySelector('.table-container') || createTableContainer();
-        container.innerHTML = data.table_html;
-
-        // Update dropdown menu without replacing the entire document
-        updateDropdownOptions(data.tables);
-        if (data.selected_table_id) {
-          document.getElementById('returnsTableSelect').value = data.selected_table_id;
-        }
-
-        // Updated debug info update: use id instead of class selector.
-        const debugInfo = document.getElementById('debugDropdown');
-        if (debugInfo && data.debug_info_html) {
-          debugInfo.innerHTML = data.debug_info_html;
-        }
-
-        // Initialize DataTable
-        initDataTable();
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Error uploading file: ' + error);
-      });
     }
   });
 
@@ -146,6 +155,58 @@ function createTableContainer() {
   container.className = 'table-container';
   document.body.appendChild(container);
   return container;
+}
+
+// New function to apply ACD row styles
+function applyACDRowStyles() {
+  $('#returnsTable tbody tr').each(function() {
+    if ($(this).find("td[data-acd='1']").length > 0) {
+      $(this).addClass('acd-row');
+    } else {
+      $(this).removeClass('acd-row');
+    }
+  });
+}
+
+// New function to handle file upload
+function fileUploadHandler(e) {
+  console.log("fileUploadHandler triggered");
+  if (this.files.length > 0) {
+    const formData = new FormData();
+    formData.append('file', this.files[0]);
+    
+    // Send file to server for processing
+    fetch('/', {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.error) {
+        console.error('Upload error:', data.error);
+        alert(data.error);
+        return;
+      }
+      // Update table content and dropdown
+      const container = document.querySelector('.table-container') || createTableContainer();
+      container.innerHTML = data.table_html;
+      updateDropdownOptions(data.tables);
+      if (data.selected_table_id) {
+        localStorage.setItem('selectedReturnsTable', data.selected_table_id);
+        document.getElementById('returnsTableSelect').value = data.selected_table_id;
+      }
+      const debugInfo = document.getElementById('debugDropdown');
+      if (debugInfo && data.debug_info_html) {
+        debugInfo.innerHTML = data.debug_info_html;
+      }
+      // Initialize DataTable
+      initDataTable();
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Error uploading file: ' + error);
+    });
+  }
 }
 
 // Initial call to set up everything

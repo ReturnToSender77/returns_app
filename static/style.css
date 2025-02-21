@@ -1,55 +1,45 @@
 /* Basic table styling */
 table, th, td {
-    border: 1px solid #ccc;
-    border-collapse: collapse;
-    padding: 8px;
-    position: relative; /* Allows absolutely positioned pseudo-elements inside TD */
-  }
-  
-  /* Table header styling */
-  th {
-    text-align: center;
-    background-color: #f0f0f0;
-    font-weight: bold;
-    text-decoration: underline;
-  }
-  
-  /* Container for the table */
-  .table-container {
-    margin: 20px;
-    padding: 0 20px;
-    font-family: Arial, sans-serif;
-    width: auto; /* Allow container to fill available space */
-  }
-  
-  td {
-    position: relative; /* let the pseudo-element position itself within each cell */
-  }
-  
-  td:hover::after {
-    content: "";
-    position: absolute;
-    /* Pin to the cell’s top-right corner */
-    top: 0;
-    right: 0;
-  
-    /* A small box, 16×16 px (adjust as you like) */
-    width: 8px;
-    height: 8px;
-  
-    /* Fill it red, but only show a right-angled triangle via clip-path */
-    background: red;
-    /*
-      The coordinate system for clip-path is the box itself (16×16).
-      polygon(100% 0, 100% 100%, 0 0) makes a triangle with corners:
-        - (100% 0)   = top-right of the box (the right-angle corner)
-        - (100% 100%)= bottom-right
-        - (0 0)      = top-left
-    */
-    clip-path: polygon(100% 0, 100% 100%, 0 0);
-  
-    cursor: pointer;
-  }
+  border: 1px solid #ccc;
+  border-collapse: collapse;
+  padding: 2px 8px; /* Increased horizontal padding */
+  position: relative;
+  text-align: left; /* Default left alignment */
+}
+
+/* Table header styling */
+th {
+  text-align: left; /* Changed from center to left */
+  background-color: #f0f0f0;
+  font-weight: bold;
+  text-decoration: underline;
+  padding: 8px; /* Consistent padding */
+}
+
+/* Container for the table */
+.table-container {
+  margin: 10px;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  width: 100%; /* Full width */
+  overflow-x: auto; /* Allows horizontal scrolling if needed */
+}
+
+td {
+  position: relative;
+}
+
+td:hover::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background: red;
+  clip-path: polygon(100% 0, 100% 100%, 0 0);
+  cursor: pointer;
+}
 
 /* Move inline styling from index.html here: */
 .table-select {
@@ -139,4 +129,8 @@ body {
 .dataTables_length,
 .dt-buttons {
     margin-bottom: 1em;
+}
+
+.acd-row {
+  background-color: #ffcccc !important; /* light red background */
 }

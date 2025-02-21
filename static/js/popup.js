@@ -1,36 +1,98 @@
-// Make attachPopupListeners globally available
 window.attachPopupListeners = function() {
+  // Select all table cells
   const cells = document.querySelectorAll("td");
   cells.forEach(function(cell) {
-    cell.addEventListener("click", function(event) {
-      const popup = document.getElementById("popup");
-      const rect = cell.getBoundingClientRect();
-
-      // Position the popup near the clicked cell
-      let popupLeft = rect.right + window.scrollX + 10;
-      if (popupLeft + popup.offsetWidth > window.innerWidth) {
-        popupLeft = rect.left + window.scrollX - popup.offsetWidth - 10;
-      }
-      popup.style.left = `${popupLeft}px`;
-      popup.style.top = `${rect.bottom + window.scrollY + 10}px`;
-      popup.style.display = "block";
-    });
+    cell.removeEventListener("click", cellClickHandler);
+    cell.addEventListener("click", cellClickHandler);
   });
 };
 
-document.addEventListener("DOMContentLoaded", function() {
-  // Initial call to add listeners to existing cells
-  attachPopupListeners();
+function cellClickHandler(event) {
+  const popup = document.getElementById("popup");
+  const popupContent = document.getElementById("popupContent");
+  const rect = this.getBoundingClientRect();
 
-  // Observe changes in the table to add listeners to new cells
-  const observer = new MutationObserver(attachPopupListeners);
+  // Default content: show cell text
+  let contentHTML = `<p>${this.textContent}</p>`;
+  
+  // Check if this cell is a DateCell via assigned data attributes
+  if (this.dataset.cellType === "date") {
+    // Append an ACD checkbox reflecting the current acd value
+    const checked = this.dataset.acd === "1" ? "checked" : "";
+    contentHTML += `
+      <label style="display:block; margin-top:10px;">
+        <input type="checkbox" id="acdCheckbox" ${checked}> ACD
+      </label>`;
+  }
+  
+  popupContent.innerHTML = contentHTML;
+  
+  // Position the popup
+  let popupLeft = rect.right + window.scrollX + 10;
+  if (popupLeft + popup.offsetWidth > window.innerWidth) {
+    popupLeft = rect.left + window.scrollX - popup.offsetWidth - 10;
+  }
+  popup.style.left = `${popupLeft}px`;
+  popup.style.top = `${rect.bottom + window.scrollY + 10}px`;
+  popup.style.display = "block";
+  
+  // For DateCell, attach listener to checkbox to update ACD value via AJAX.
+  if (this.dataset.cellType === "date") {
+    const acdCheckbox = document.getElementById("acdCheckbox");
+    const cellId = this.dataset.cellId;
+    acdCheckbox.addEventListener("change", function() {
+      const newValue = acdCheckbox.checked ? 1 : 0;
+      fetch("/update_datecell_acd", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({cell_id: cellId, acd: newValue})
+      })
+      .then(response => response.json())
+      .then(data => {
+        if(data.error) {
+          console.error(data.error);
+        } else {
+          // Update the cell's dataset
+          const cell = document.querySelector(`td[data-cell-id="${cellId}"]`);
+          if(cell) {
+            cell.dataset.acd = newValue;
+            // Update row style inline for immediate feedback
+            const row = cell.closest("tr");
+            if(newValue == 1) {
+              row.style.backgroundColor = "#ffcccc";
+            } else {
+              row.style.backgroundColor = "";
+            }
+          }
+        }
+      })
+      .catch(err => {
+        console.error(err);
+      });
+    });
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  attachPopupListeners();
+  // Reattach after table changes using MutationObserver
   const tableContainer = document.querySelector(".table-container");
   if (tableContainer) {
+    const observer = new MutationObserver(function(mutations, observer) {
+      attachPopupListeners();
+    });
     observer.observe(tableContainer, { childList: true, subtree: true });
   }
-
-  // Close popup function
-  window.closePopup = function() {
-    document.getElementById("popup").style.display = "none";
-  };
 });
+
+// Add a global keydown listener to close the popup when Esc is pressed
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape") {
+    closePopup();
+  }
+});
+
+function closePopup() {
+  document.getElementById("popup").style.display = "none";
+}
+window.closePopup = closePopup;
