@@ -9,7 +9,7 @@ class ReturnsTable(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
-    upload_time = db.Column(db.DateTime, default=datetime.utcnow)  # New field to store upload time
+    upload_time = db.Column(db.DateTime, default=datetime.utcnow)  # Need to fix this
     
     # Note cascade delete to columns
     columns = db.relationship('Column', backref='returns_table', 
@@ -31,11 +31,10 @@ class FactivaArticle(db.Model):
     returns_table_id = db.Column(db.Integer, 
                                  db.ForeignKey('returns_tables.id', ondelete='CASCADE'),
                                  nullable=False)
-    article_id = db.Column(db.String, nullable=False)  # dynamic ID from parser
     headline = db.Column(db.String, nullable=False)
-    author = db.Column(db.String, nullable=True)
-    word_count = db.Column(db.String, nullable=True)
-    publish_date = db.Column(db.String, nullable=True)
+    author = db.Column(db.String, nullable=True) 
+    word_count = db.Column(db.Integer, nullable=True)  # changed to Integer
+    publish_date = db.Column(db.DateTime, nullable=True)  # changed to DateTime
     source = db.Column(db.String, nullable=True)
     content = db.Column(db.Text, nullable=True)
     

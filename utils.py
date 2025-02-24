@@ -2,35 +2,26 @@ import pandas as pd
 from models import db, ReturnsTable, Column, DateColumn, TextColumn, NumberCell, DateCell, TextCell
 
 def extract_data_file(file, database) -> tuple[ReturnsTable, pd.DataFrame]:
-    """This function takes an uploaded file (CSV or Excel), reads it into a pandas DataFrame,
-    creates corresponding ReturnsTable and Column models, and stores all the data.
-    It handles automatic type detection (date, numerical, text) and data conversion for different column types.
-    
+    """Extract file data and store it in the database.
+
+    This function takes an uploaded file (CSV or Excel), reads it into a pandas DataFrame,
+    creates the corresponding ReturnsTable and Column models, and stores the data.
+    It automatically detects and converts column types (date, numeric, and text).
+
+    If a table with the same filename already exists, it will be deleted.
+
     Args:
-        DataFrame: pandas DataFrame containing the original file contents
-        ValueError: If column type is not supported (must be numeric, datetime, or text)
-        Exception: If there are any errors during file reading or data processing
-    Notes:
-        - If a table with the same filename already exists, it will be deleted
-        - Column types are automatically detected and mapped to appropriate database models:
-            * Datetime columns -> DateColumn with DateCell entries
-            * Numeric columns -> Column with NumberCell entries  
-            * Text/other columns -> TextColumn with TextCell entries
-        - Null values are handled appropriately for each column type
-        - The database session is not committed in this function, caller must handle db.commit
-        Process an uploaded file and store its data in the database.
-    
-    Args:
-        file: Uploaded file object (CSV or Excel format)
-        database: Database instance to store the data
-        
+        file: Uploaded file object (CSV or Excel format).
+        database: Database instance to use for storing the data.
+
     Returns:
         tuple: (ReturnsTable, pandas.DataFrame)
-            - ReturnsTable: Database model instance containing the processed data
-            - DataFrame: pandas DataFrame containing the file contents
-            
+            - ReturnsTable: Database model instance representing the processed data.
+            - DataFrame: pandas DataFrame containing the file contents.
+
     Raises:
-        ValueError: If column type is not supported (numeric, datetime, or text)
+        ValueError: If a column type is not supported (only numeric, datetime, or text).
+        Exception: If any other error occurs during file reading or data processing.
     """
     try:
         filename = file.filename

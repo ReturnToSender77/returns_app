@@ -1,27 +1,40 @@
 // Wait for the document to be fully loaded before initializing
 $(document).ready(function() {
-  // If a previously selected table exists in localStorage, load it.
   const savedTableId = localStorage.getItem('selectedReturnsTable');
+  
+  // Only proceed if there's a saved table id and it's not the "upload" flag.
   if (savedTableId && savedTableId !== "upload") {
+    // Try fetching the table data
     fetch(`/get_table/${savedTableId}`)
-      .then(response => response.json())
-      .then(data => {
-        const container = document.querySelector('.table-container') || createTableContainer();
-        container.innerHTML = data.table_html;
-        initDataTable();
-        document.getElementById('returnsTableSelect').value = savedTableId;
+      .then(response => {
+        // If the table does not exist, clean up the localStorage entry.
+        if (!response.ok) {
+          localStorage.removeItem('selectedReturnsTable');
+          // Instead of throwing an error, simply resolve with an empty object.
+          return {};
+        }
+        return response.json();
       })
-      .catch(error => console.error('Error loading saved table:', error));
-  }
-  // Otherwise, if a table exists on page load, initialize DataTable.
-  else if (document.querySelector('#returnsTable')) {
+      .then(data => {
+        // Proceed only if table_html is present.
+        if (data.table_html) {
+          const container = document.querySelector('.table-container') || createTableContainer();
+          container.innerHTML = data.table_html;
+          initDataTable();
+          document.getElementById('returnsTableSelect').value = savedTableId;
+        }
+      })
+      .catch(error => {
+        console.warn('No valid saved table found, localStorage cleared.');
+      });
+  } else if (document.querySelector('#returnsTable')) {
     initDataTable();
   }
   attachEventListeners();
 });
 
 /**
- * Initializes or reinitializes the DataTable with custom configuration
+ * Initializes the DataTable plugin with custom options
  */
 function initDataTable() {
   $('#returnsTable').DataTable({
@@ -55,7 +68,6 @@ function initDataTable() {
   });
 }
 
-// New function to update the custom footer
 function updateCustomFooter() {
   const footerEl = document.getElementById('customFooter');
   if (!footerEl) return; // No footer defined
@@ -86,7 +98,7 @@ function updateCustomFooter() {
 }
 
 /**
- * Sets up event listeners for ReturnsTable selection and file uploads
+ * Attaches event listeners to the various elements on the page.
  */
 function attachEventListeners() {
   const fileInput = document.getElementById('fileInput');
@@ -121,11 +133,8 @@ function attachEventListeners() {
         .catch(error => console.error('Error:', error));
     }
   });
-
-  // Remove the attachPopupListeners call at the end since it's handled by popup.js
 }
 
-// Add new helper function to update dropdown options
 function updateDropdownOptions(tables) {
   const dropdown = document.getElementById('returnsTableSelect');
   // Store the current selection
@@ -149,7 +158,6 @@ function updateDropdownOptions(tables) {
   }
 }
 
-// Replace the script that created a table-container if absent
 function createTableContainer() {
   const container = document.createElement('div');
   container.className = 'table-container';
@@ -157,7 +165,7 @@ function createTableContainer() {
   return container;
 }
 
-// New function to apply ACD row styles
+// Apply ACD row styles
 function applyACDRowStyles() {
   $('#returnsTable tbody tr').each(function() {
     if ($(this).find("td[data-acd='1']").length > 0) {
@@ -168,7 +176,7 @@ function applyACDRowStyles() {
   });
 }
 
-// New function to handle file upload
+// Function to handle file uploads
 function fileUploadHandler(e) {
   console.log("fileUploadHandler triggered");
   if (this.files.length > 0) {
@@ -209,5 +217,5 @@ function fileUploadHandler(e) {
   }
 }
 
-// Initial call to set up everything
+// Initial call to set up event listeners
 attachEventListeners();

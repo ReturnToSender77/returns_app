@@ -1,6 +1,9 @@
 from flask import Blueprint, render_template, request, jsonify
-from models import db, ReturnsTable, Column, DateCell  # Import Column for the new route
+from models import db, ReturnsTable, Column, DateCell, FactivaArticle
 from utils import extract_data_file, convert_ReturnsTable_to_html
+from parse_html_articles import parse_html_articles  
+import tempfile
+
 
 main_blueprint = Blueprint('main', __name__)
 
@@ -13,7 +16,11 @@ def index():
 @main_blueprint.route("/get_table/<int:table_id>")
 def get_table(table_id):
     try:
-        returns_table = ReturnsTable.query.get_or_404(table_id)
+        returns_table = ReturnsTable.query.get(table_id)
+        # Ensure the table exists
+        if returns_table is None:
+            return jsonify({'error': f"Table {table_id} not found"}), 404
+
         # Ensure the table has columns
         if not returns_table.columns:
             return jsonify({'table_html': '<table id="returnsTable" class="display"><thead><tr><th>No data available</th></tr></thead><tbody><tr><td>This table is empty</td></tr></tbody></table>'})
@@ -98,11 +105,72 @@ def upload_and_display():
     # Updated template name from "index.html" to "returnstable.html"
     return render_template("returnstable.html", returns_tables=tables)
 
-@main_blueprint.route("/chron")
+@main_blueprint.route("/chron", methods=["GET", "POST"])
 def chron():
+    """
+    Handle the uploading and processing of Factiva articles.
+    This function handles both POST and GET requests:
+    POST:
+    - Expects a form with 'returns_table_id' and a list of 'factiva_files'.
+    - Parses and saves the articles from the uploaded Factiva files into the database.
+    - Returns a JSON response with a success message and the list of uploaded articles.
+    GET:
+    - Queries and renders the 'chron.html' template with columns, returns tables, and factiva articles.
+    Returns:
+        - For POST requests:
+            - JSON response with a success message and the list of uploaded articles.
+            - JSON response with an error message and status code 400 if 'returns_table_id' is not provided.
+            - JSON response with an error message and status code 500 if an exception occurs during processing.
+        - For GET requests:
+            - Renders the 'chron.html' template with columns, returns tables, and factiva articles.
+    """
+    if request.method == "POST":
+        try:
+            returns_table_id = request.form.get("returns_table_id")
+            if not returns_table_id:
+                return jsonify({"error": "No returns_table_id provided"}), 400
+            returns_table_id = int(returns_table_id)
+            
+            factiva_files = request.files.getlist("factiva_files")
+            total_articles_uploaded = 0
+            
+            for f in factiva_files:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
+                    f.save(tmp.name)
+                    articles = parse_html_articles(tmp.name)  
+                    for art in articles:
+                        new_article = FactivaArticle(
+                            returns_table_id=returns_table_id,
+                            headline=art["headline"],
+                            author=art["author"],
+                            word_count=art["word_count"],
+                            publish_date=art["publish_date"],
+                            source=art["source"],
+                            content=art["content"]
+                        )
+                        db.session.add(new_article)
+                        total_articles_uploaded += 1
+            db.session.commit()
+            
+            # Query all factiva articles for the given table
+            factiva_articles = FactivaArticle.query.filter_by(returns_table_id=returns_table_id).all()
+            factiva_articles_data = [{"headline": article.headline, "author": article.author} 
+                                     for article in factiva_articles]
+            response = {
+                "message": f"Factiva articles uploaded successfully ({total_articles_uploaded} articles added)",
+                "factiva_articles": factiva_articles_data
+            }
+            return jsonify(response)
+        except Exception as e:
+            print("Error during Factiva processing:", str(e))
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
+
+    # GET request handling:
     columns = Column.query.all()
-    returns_tables = ReturnsTable.query.all()  # Pass returns_tables for debug info
-    return render_template("chron.html", columns=columns, returns_tables=returns_tables)
+    returns_tables = ReturnsTable.query.all()
+    factiva_articles = []
+    return render_template("chron.html", columns=columns, returns_tables=returns_tables, factiva_articles=factiva_articles)
 
 @main_blueprint.route("/get_column/<int:col_id>")
 def get_column(col_id):
@@ -144,3 +212,12 @@ def update_datecell_acd():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+@main_blueprint.route("/get_factiva_articles/<int:table_id>")
+def get_factiva_articles(table_id):
+    try:
+        articles = FactivaArticle.query.filter_by(returns_table_id=table_id).all()
+        articles_data = [{"headline": article.headline, "author": article.author} for article in articles]
+        return jsonify({'factiva_articles': articles_data})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
