@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Chron - Column Selector{% endblock %}
 {% block content %}
-  <!-- ReturnsTable selector without the upload option -->
   <div class="table-select">
     <select class="returnsTableSelector" id="returnsTableSelectChron">
       <option value="">Select Returns Table</option>
@@ -13,7 +12,6 @@
     </select>
   </div>
 
-  <!-- Column selector and display remain unchanged -->
   <div class="column-selector" style="margin-top:20px;">
     <select id="columnSelect">
       <option value="" disabled selected>Select Column</option>
@@ -24,7 +22,7 @@
     <!-- Selected column details will be displayed here -->
   </div>
 
-  <!-- Factiva upload section remains unchanged -->
+  <!-- Factiva upload section -->
   {% if returns_tables|length > 0 %}
   <div class="factiva-upload">
     <h2>Upload Factiva Articles</h2>

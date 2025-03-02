@@ -37,7 +37,7 @@ def parse_html_articles(html_path):
             div.find_next("b", string="WC").find_next("td").get_text(strip=True)
             if div.find_next("b", string="WC") else None
         )
-        # extract the integer from the word count string (e.g., "233 words")
+        # Extract the integer from the word count string (e.g., "233 words")
         word_count = int(re.search(r"(\d+)", word_count_text).group(1)) if word_count_text else None
 
         publish_date_text = (
