@@ -1,49 +1,557 @@
 {% extends "base.html" %}
-{% block title %}Chron - Column Selector{% endblock %}
+{% block title %}Chron - Export Returns Table{% endblock %}
 {% block content %}
-  <div class="table-select">
-    <select class="returnsTableSelector" id="returnsTableSelectChron">
-      <option value="">Select Returns Table</option>
-      {% for table in returns_tables %}
-        <option value="{{ table.id }}">
-          {{ table.name }} — {{ table.upload_time.strftime('%Y-%m-%d %H:%M:%S') if table.upload_time else 'N/A' }}
-        </option>
-      {% endfor %}
-    </select>
-  </div>
+<div class="chron-container">
+  <h1 class="section-title">Chronology Export</h1>
+  
+  <div class="card">
+    <div class="card-header">
+      <h2>Select Returns Table to Export</h2>
+    </div>
+    
+    <div class="card-body">
+      <div class="form-group">
+        <label for="returnsTableSelectChron" class="form-label">Returns Table:</label>
+        <select class="form-control" id="returnsTableSelectChron">
+          <option value="">Select Returns Table</option>
+          {% for table in returns_tables %}
+            <option value="{{ table.id }}">
+              {{ table.name }} — {{ table.upload_time.strftime('%Y-%m-%d %H:%M:%S') if table.upload_time else 'N/A' }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <!-- New Title Input Field -->
+      <div class="form-group">
+        <label for="excelTitle" class="form-label">Excel Title:</label>
+        <input type="text" class="form-control" id="excelTitle" placeholder="Enter a title for your Excel export">
+      </div>
 
-  <div class="column-selector" style="margin-top:20px;">
-    <select id="columnSelect">
-      <option value="" disabled selected>Select Column</option>
-    </select>
-    <button id="showColumn">Show Column</button>
-  </div>
-  <div id="columnDisplay">
-    <!-- Selected column details will be displayed here -->
-  </div>
+      <div class="dual-table-container mt-4">
+        <!-- Left side: Original returns table -->
+        <div class="returns-table-container">
+          <h3>Returns Table</h3>
+          <div id="tableHeaders"></div>
+          <div class="table-scroll">
+            <table id="chronTable" class="display-table">
+              <thead id="chronTableHead">
+                <tr>
+                  <th colspan="100%">Select a returns table to load data</th>
+                </tr>
+              </thead>
+              <tbody id="chronTableBody">
+                <tr>
+                  <td colspan="100%" class="text-center">No data available</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <!-- Right side: Customizable chron table -->
+        <div class="chron-table-container">
+          <h3>Chron Table <small>(Customizable for Export)</small></h3>
+          <div class="table-scroll">
+            <table id="customChronTable" class="display-table">
+              <thead id="customChronTableHead">
+                <tr>
+                  <th colspan="100%">Add columns from the Returns Table</th>
+                </tr>
+              </thead>
+              <tbody id="customChronTableBody">
+                <tr>
+                  <td colspan="100%" class="text-center">No columns added yet</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
-  <!-- Factiva upload section -->
-  {% if returns_tables|length > 0 %}
-  <div class="factiva-upload">
-    <h2>Upload Factiva Articles</h2>
-    <form id="factivaForm" action="/chron" method="POST" enctype="multipart/form-data">
-      <input type="hidden" name="returns_table_id" id="returnsTableId">
-      <input type="file" name="factiva_files" accept=".html" multiple required>
-      <button type="submit">Upload</button>
-    </form>
+      <div class="mt-4">
+        <!-- Buttons switched position and renamed as requested -->
+        <button id="exportToStyledExcel" class="btn btn-primary" disabled>Export Chron</button>
+        <button id="exportToExcel" class="btn btn-secondary" disabled>Export to Excel</button>
+      </div>
+    </div>
   </div>
-  <div class="factiva-list">
-    <h3>Factiva Articles</h3>
-    <ul id="factivaArticlesList">
-      {% for article in factiva_articles %}
-        <li>{{ article.headline }} by {{ article.author }}</li>
-      {% else %}
-        <li>No Factiva articles uploaded.</li>
-      {% endfor %}
-    </ul>
+  <!-- Article list section - Replaced with checkboxes for field selection -->
+  <div class="card mt-4">
+    <div class="card-header">
+      <h2>Factiva Integration</h2>
+    </div>
+    <div class="card-body">
+      <div id="factivaFields" class="mb-3">
+        <div class="factiva-field-selector">
+          <h4>Select Factiva fields to add to the returns table:</h4>
+          <div class="form-check">
+            <input class="form-check-input factiva-field" type="checkbox" value="headline" id="field-headline">
+            <label class="form-check-label" for="field-headline">
+              Headline
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input factiva-field" type="checkbox" value="author" id="field-author">
+            <label class="form-check-label" for="field-author">
+              Author
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input factiva-field" type="checkbox" value="word_count" id="field-word_count">
+            <label class="form-check-label" for="field-word_count">
+              Word Count
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input factiva-field" type="checkbox" value="source" id="field-source">
+            <label class="form-check-label" for="field-source">
+              Source
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input factiva-field" type="checkbox" value="content_preview" id="field-content_preview">
+            <label class="form-check-label" for="field-content_preview">
+              Content Preview
+            </label>
+          </div>
+        </div>
+        <button id="mergeFactivaData" class="btn btn-primary mt-3" disabled onclick="window.factivaMerge.perform()">Merge Selected Fields</button>
+        <div id="mergeStatus" class="alert mt-2" style="display:none;"></div>
+        
+        <!-- Debug section -->
+        <div id="mergeDebug" class="debug-section mt-3" style="display:none;">
+          <h5>Merge Debug Info</h5>
+          <pre id="mergeDebugInfo"></pre>
+        </div>
+      </div>
+      
+      <div>
+        <h4>Available Factiva Articles:</h4>
+        <ul id="factivaArticlesList">
+          <li>No articles available</li>
+        </ul>
+      </div>
+    </div>
   </div>
-  {% endif %}
+</div>
+<style>
+  .chron-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  .section-title {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #333;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+  }
+  .card {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+  }
+  .card-header {
+    background-color: #f5f5f5;
+    padding: 15px;
+    border-bottom: 1px solid #ddd;
+  }
+  .card-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  .card-body {
+    padding: 20px;
+  }
+  .form-group {
+    margin-bottom: 20px;
+  }
+  .form-label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+  .form-control {
+    display: block;
+    width: 100%;
+    padding: 8px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  .display-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .display-table th {
+    background-color: #e0e0e0;
+    padding: 10px;
+    text-align: left;
+    font-weight: bold;
+    border: 1px solid #ddd;
+  }
+  .display-table td {
+    padding: 10px;
+    border: 1px solid #ddd;
+  }
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .btn-primary {
+    background-color: #007bff;
+    color: white;
+  }
+  .btn-primary:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: #0069d9;
+  }
+  .btn-secondary {
+    background-color: #6c757d;
+    color: white;
+  }
+  .btn-secondary:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: #5a6268;
+  }
+  .mt-4 {
+    margin-top: 20px;
+  }
+  .text-center {
+    text-align: center;
+  }
+  
+  /* Dual table specific styles */
+  .dual-table-container {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+  }
+  
+  .returns-table-container, .chron-table-container {
+    flex: 1;
+    min-width: 0; /* Fix for flexbox overflow */
+  }
+  
+  .table-scroll {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+  }
+  
+  .col-action-menu {
+    position: absolute;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    padding: 8px;
+    z-index: 1000;
+    display: none;
+  }
+  
+  .col-action-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 6px 12px;
+    margin: 3px 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+  
+  .col-action-menu button:hover {
+    background-color: #f0f0f0;
+  }
+  
+  .column-header {
+    position: relative;
+    cursor: pointer;
+  }
+  
+  .column-header:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .column-remove-btn {
+    font-size: 12px;
+    color: red;
+    cursor: pointer;
+    padding: 0 5px;
+    display: none;
+  }
+  
+  .column-header:hover .column-remove-btn {
+    display: inline;
+  }
+
+  .col-handle {
+    cursor: grab;
+    color: #999;
+    margin-right: 5px;
+  }
+  
+  /* Drag and drop styles */
+  .dragging {
+    opacity: 0.4;
+  }
+  
+  .drag-over {
+    border-top: 3px solid #007bff;
+  }
+  
+  /* Make the column headers in the Chron Table more obviously draggable */
+  #customChronTable th.column-header {
+    cursor: grab;
+    user-select: none;
+  }
+  
+  #customChronTable th.column-header:active {
+    cursor: grabbing;
+  }
+  
+  #customChronTable .col-handle {
+    color: #007bff;
+    font-weight: bold;
+  }
+  
+  .ml-2 {
+    margin-left: 8px;
+  }
+  
+  /* Existing styles for footnotes and other components */
+  #chronTable {
+    width: 100%;
+    margin-bottom: 20px;
+    border-collapse: collapse;
+  }
+  #chronTable th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    text-align: left;
+    padding: 10px;
+    border: 1px solid #ddd;
+  }
+  #chronTable td {
+    padding: 10px;
+    border: 1px solid #ddd;
+    word-break: break-word;
+  }
+  #chronTable tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+  
+  /* Footnote popup styles */
+  .footnote-popup {
+    position: fixed;
+    z-index: 1000;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    width: 400px;
+    max-width: 90%;
+    display: none;
+  }
+  
+  .footnote-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f5f5f5;
+    padding: 10px 15px;
+    border-bottom: 1px solid #ddd;
+  }
+  
+  .footnote-header h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+  
+  .close-button {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #666;
+  }
+  
+  .footnote-content {
+    padding: 15px;
+  }
+  
+  .footnote-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 15px;
+  }
+  
+  .footnote-indicator {
+    color: red;
+    margin-left: 3px;
+    cursor: help;
+  }
+  
+  /* Make table cells and headers clickable */
+  #chronTable th, 
+  #chronTable td {
+    cursor: pointer;
+    position: relative;
+  }
+  
+  #chronTable th:hover, 
+  #chronTable td:hover {
+    background-color: #f0f0f0;
+  }
+  
+  .factiva-field-selector {
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    background-color: #f8f9fa;
+  }
+  
+  .factiva-field-selector h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 16px;
+  }
+  
+  .form-check {
+    margin-bottom: 8px;
+  }
+  
+  #mergeStatus {
+    font-size: 14px;
+  }
+  
+  #mergeStatus.alert-success {
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+  }
+  
+  #mergeStatus.alert-danger {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+  }
+
+  /* Make disabled buttons more obvious */
+  .btn-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    position: relative;
+  }
+  
+  .btn-disabled::before {
+    content: '⛔';  /* No symbol */
+    position: absolute;
+    right: -22px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+  }
+
+  .debug-section {
+    font-size: 12px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+    margin-top: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  #mergeDebugInfo {
+    white-space: pre-wrap;
+    margin: 0;
+  }
+</style>
 {% endblock %}
+
 {% block scripts %}
-  <script src="{{ url_for('static', filename='js/chron.js') }}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="{{ url_for('static', filename='js/chron_popup.js') }}"></script>
+<script src="{{ url_for('static', filename='js/factiva_merge.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chron_tables.js') }}"></script>
+
+<!-- Additional script for initialization -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('DOM fully loaded - initializing interfaces');
+  
+  // Show debug info on page during development
+  document.getElementById('mergeDebug').style.display = 'block';
+  
+  // Set up factiva fields checkboxes
+  document.querySelectorAll('.factiva-field').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+      console.log(`Checkbox ${this.id} clicked, value: ${this.checked}`);
+      if (window.factivaMerge && window.factivaMerge.updateSelectedFields) {
+        window.factivaMerge.updateSelectedFields();
+      }
+    });
+  });
+  
+  // For testing - debug button
+  const debugButton = document.createElement('button');
+  debugButton.textContent = 'Debug: Enable Merge';
+  debugButton.style.fontSize = '10px';
+  debugButton.style.marginLeft = '10px';
+  debugButton.addEventListener('click', function() {
+    const mergeButton = document.getElementById('mergeFactivaData');
+    if (mergeButton) {
+      mergeButton.disabled = false;
+      mergeButton.classList.remove('btn-disabled');
+      alert('Merge button forcibly enabled.');
+    }
+  });
+  document.querySelector('.factiva-field-selector').appendChild(debugButton);
+
+  // Set up table selection to load footnotes
+  const tableSelector = document.getElementById('returnsTableSelectChron');
+  if (tableSelector) {
+    tableSelector.addEventListener('change', function() {
+      const tableId = this.value;
+      if (tableId) {
+        // Set the current table ID for the footnote system
+        if (window.setCurrentTableId) {
+          window.setCurrentTableId(tableId);
+        }
+        
+        // Load footnotes for this table
+        if (window.loadFootnotes) {
+          window.loadFootnotes(tableId);
+        }
+      }
+    });
+    
+    // Initialize with currently selected table
+    if (tableSelector.value) {
+      if (window.setCurrentTableId) {
+        window.setCurrentTableId(tableSelector.value);
+      }
+    }
+  }
+});
+</script>
 {% endblock %}

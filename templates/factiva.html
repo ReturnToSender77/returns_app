@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Factiva - Article Upload{% endblock %}
+{% block content %}
+  <div class="table-select">
+    <select class="returnsTableSelector" id="returnsTableSelectFactiva">
+      <option value="">Select Returns Table</option>
+      {% for table in returns_tables %}
+        <option value="{{ table.id }}">
+          {{ table.name }} — {{ table.upload_time.strftime('%Y-%m-%d %H:%M:%S') if table.upload_time else 'N/A' }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="column-selector" style="margin-top:20px;">
+    <select id="columnSelect">
+      <option value="" disabled selected>Select Column</option>
+    </select>
+    <button id="showColumn">Show Column</button>
+  </div>
+  <div id="columnDisplay">
+    <!-- Selected column details will be displayed here -->
+  </div>
+
+  <!-- Factiva upload section -->
+  {% if returns_tables|length > 0 %}
+  <div class="factiva-upload">
+    <h2>Upload Factiva Articles</h2>
+    <form id="factivaForm" action="/factiva/upload" method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="returns_table_id" id="returnsTableId">
+      <input type="file" name="factiva_files" accept=".html" multiple required>
+      <button type="submit">Upload</button>
+    </form>
+    <div id="uploadStatus" class="mt-3" style="display:none;"></div>
+  </div>
+  <div class="factiva-list">
+    <h3>Factiva Articles</h3>
+    <ul id="factivaArticlesList">
+      {% for article in factiva_articles %}
+        <li>{{ article.headline }} by {{ article.author }}</li>
+      {% else %}
+        <li>No Factiva articles uploaded.</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    // Initialize on document load
+    document.addEventListener('DOMContentLoaded', function() {
+      const tableSelector = document.getElementById('returnsTableSelectFactiva');
+      const tableIdField = document.getElementById('returnsTableId');
+      
+      // Set the hidden field when a table is selected
+      tableSelector.addEventListener('change', function() {
+        const tableId = this.value;
+        tableIdField.value = tableId;
+        
+        if (!tableId) {
+          document.getElementById('factivaArticlesList').innerHTML = '<li>No Factiva articles uploaded.</li>';
+          return;
+        }
+        
+        // Load articles for the selected table
+        loadFactivaArticles(tableId);
+      });
+      
+      // Handle form submission with AJAX
+      document.getElementById('factivaForm').addEventListener('submit', function(e) {
+        e.preventDefault(); // Prevent traditional form submission
+        
+        if (!tableIdField.value) {
+          alert('Please select a returns table first');
+          return false;
+        }
+        
+        const formData = new FormData(this);
+        const statusDiv = document.getElementById('uploadStatus');
+        
+        statusDiv.innerHTML = 'Uploading articles...';
+        statusDiv.style.display = 'block';
+        statusDiv.className = 'alert alert-info mt-3';
+        
+        fetch('/factiva/upload', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            statusDiv.innerHTML = `<strong>Error:</strong> ${data.error}`;
+            statusDiv.className = 'alert alert-danger mt-3';
+            return;
+          }
+          
+          // Show success message
+          statusDiv.innerHTML = `<strong>Success:</strong> ${data.message}`;
+          statusDiv.className = 'alert alert-success mt-3';
+          
+          // Update the article list
+          const ul = document.getElementById('factivaArticlesList');
+          
+          if (data.factiva_articles && data.factiva_articles.length > 0) {
+            let content = '';
+            data.factiva_articles.forEach(article => {
+              content += `<li><strong>${article.headline}</strong> by ${article.author}</li>`;
+            });
+            ul.innerHTML = content;
+          } else {
+            ul.innerHTML = '<li>No Factiva articles uploaded.</li>';
+          }
+          
+          // Clear the file input
+          document.querySelector('input[type="file"]').value = '';
+          
+          // Hide status after 5 seconds
+          setTimeout(() => {
+            statusDiv.style.display = 'none';
+          }, 5000);
+        })
+        .catch(err => {
+          console.error('Error uploading articles:', err);
+          statusDiv.innerHTML = '<strong>Error:</strong> Failed to upload articles. Check console for details.';
+          statusDiv.className = 'alert alert-danger mt-3';
+        });
+      });
+      
+      // Helper function to load Factiva articles
+      function loadFactivaArticles(tableId) {
+        fetch(`/get_factiva_articles/${tableId}`)
+          .then(res => res.json())
+          .then(data => {
+            const ul = document.getElementById('factivaArticlesList');
+            if(data.error) {
+              ul.innerHTML = `<li>Error: ${data.error}</li>`;
+              return;
+            }
+            
+            if(data.factiva_articles && data.factiva_articles.length > 0) {
+              let content = '';
+              data.factiva_articles.forEach(article => {
+                content += `<li><strong>${article.headline}</strong> by ${article.author}</li>`;
+              });
+              ul.innerHTML = content;
+            } else {
+              ul.innerHTML = '<li>No Factiva articles uploaded.</li>';
+            }
+          })
+          .catch(err => {
+            console.error("Error fetching factiva articles:", err);
+            document.getElementById('factivaArticlesList').innerHTML = '<li>Error fetching articles</li>';
+          });
+      }
+    });
+  </script>
+
+  <style>
+    .alert {
+      padding: 10px 15px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    }
+    .alert-success {
+      background-color: #d4edda;
+      border-color: #c3e6cb;
+      color: #155724;
+    }
+    .alert-danger {
+      background-color: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+    }
+    .alert-info {
+      background-color: #d1ecf1;
+      border-color: #bee5eb;
+      color: #0c5460;
+    }
+    .mt-3 {
+      margin-top: 15px;
+    }
+  </style>
+{% endblock %}

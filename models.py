@@ -1,8 +1,24 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import json
 
 # Instantiate the database
 db = SQLAlchemy()
+
+# JSON serialization helper for SQLite
+class JsonEncodedDict(db.TypeDecorator):
+    """Enables JSON storage by encoding and decoding on the fly."""
+    impl = db.Text
+    
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return '{}'
+        return json.dumps(value)
+        
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return {}
+        return json.loads(value)
 
 class ReturnsTable(db.Model):
     __tablename__ = 'returns_tables'
@@ -19,10 +35,14 @@ class ReturnsTable(db.Model):
     # Factiva articles relationship
     factiva_articles = db.relationship('FactivaArticle', backref='returns_table',
                                        lazy=True, cascade='all, delete-orphan')
+    
+    # Removed footnotes relationship
 
     def __repr__(self):
         column_names = [column.name for column in self.columns]
         return f"<ReturnsTable(name={self.name}, columns={column_names})>"
+
+# Remove Footnote model
 
 class FactivaArticle(db.Model):
     __tablename__ = 'factiva_articles'
@@ -49,6 +69,11 @@ class Column(db.Model):
     name = db.Column(db.String, nullable=False)
     discriminator = db.Column(db.String(50))  
 
+    # Add footnote-related fields
+    header_footnote = db.Column(db.Text, nullable=True)  # Footnote for the column header
+    # Use the custom type for JSON in SQLite
+    cell_footnotes = db.Column(JsonEncodedDict, nullable=True)
+
     # Add cascade delete to cells
     cells = db.relationship('BaseCell', backref='column', 
                           lazy=True, cascade='all, delete-orphan',
@@ -67,6 +92,45 @@ class Column(db.Model):
     def __repr__(self):
         return f"<Column(name={self.name})>"
     
+    def set_footnote(self, cell_index, text):
+        """
+        Set a footnote for a cell at the given index
+        cell_index = 0 means column header
+        cell_index > 0 means the (index-1)th cell
+        """
+        if cell_index == 0:
+            self.header_footnote = text
+        else:
+            if self.cell_footnotes is None:
+                self.cell_footnotes = {}
+            
+            cell_idx_str = str(cell_index-1)
+            
+            if text:  # If text is not empty, add/update footnote
+                # Create a new dict to trigger SQLAlchemy change detection
+                new_footnotes = dict(self.cell_footnotes)
+                new_footnotes[cell_idx_str] = text
+                self.cell_footnotes = new_footnotes
+            elif cell_idx_str in self.cell_footnotes:  # If text is empty, remove footnote
+                # Create a new dict to trigger SQLAlchemy change detection
+                new_footnotes = dict(self.cell_footnotes)
+                del new_footnotes[cell_idx_str]
+                self.cell_footnotes = new_footnotes
+    
+    def get_footnote(self, cell_index):
+        """
+        Get the footnote for a cell at the given index
+        cell_index = 0 means column header
+        cell_index > 0 means the (index-1)th cell
+        """
+        if cell_index == 0:
+            return self.header_footnote or ""
+        
+        if not self.cell_footnotes:
+            return ""
+        
+        return self.cell_footnotes.get(str(cell_index-1), "")
+
 class DateColumn(Column):
     __mapper_args__ = {
         'polymorphic_identity': 'datecolumn'

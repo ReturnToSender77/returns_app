@@ -69,7 +69,8 @@
     <div style="display: flex; align-items: center;">
       <div class="tab-header">
         <button class="tab-button" id="homeTab" data-tab="home">Home</button>
-        <button class="tab-button" id="chronTab" data-tab="chron">Chron</button>
+        <button class="tab-button" id="chronTab" data-tab="chron">Chronology</button>
+        <button class="tab-button" id="factivaTab" data-tab="factiva">Factiva</button>
       </div>
       <button id="debugToggle">Debug</button>
     </div>
@@ -103,6 +104,9 @@
     });
     document.getElementById('chronTab').addEventListener('click', function(){
       window.location.href = "/chron";
+    });
+    document.getElementById('factivaTab').addEventListener('click', function(){
+      window.location.href = "/factiva";
     });
   </script>
   {% block scripts %}{% endblock %}

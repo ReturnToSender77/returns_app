@@ -1,6 +1,11 @@
 window.attachPopupListeners = function() {
-  // Select all table cells
-  const cells = document.querySelectorAll("td");
+  // Skip if we're on the chronology page
+  if (window.location.pathname === "/chron") {
+    return;
+  }
+  
+  // Select all table cells but skip the chronology table
+  const cells = document.querySelectorAll("td:not(#chronTable td)");
   cells.forEach(function(cell) {
     cell.removeEventListener("click", cellClickHandler);
     cell.addEventListener("click", cellClickHandler);
@@ -8,6 +13,11 @@ window.attachPopupListeners = function() {
 };
 
 function cellClickHandler(event) {
+  // Skip if the cell is part of the chronology table
+  if (event.target.closest('#chronTable')) {
+    return;
+  }
+  
   const popup = document.getElementById("popup");
   const popupContent = document.getElementById("popupContent");
   const rect = this.getBoundingClientRect();
@@ -74,14 +84,18 @@ function cellClickHandler(event) {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
-  attachPopupListeners();
-  // Reattach after table changes using MutationObserver
-  const tableContainer = document.querySelector(".table-container");
-  if (tableContainer) {
-    const observer = new MutationObserver(function(mutations, observer) {
-      attachPopupListeners();
-    });
-    observer.observe(tableContainer, { childList: true, subtree: true });
+  // Skip popup initialization on the chronology page
+  if (window.location.pathname !== "/chron") {
+    attachPopupListeners();
+    
+    // Reattach after table changes using MutationObserver
+    const tableContainer = document.querySelector(".table-container");
+    if (tableContainer) {
+      const observer = new MutationObserver(function(mutations, observer) {
+        attachPopupListeners();
+      });
+      observer.observe(tableContainer, { childList: true, subtree: true });
+    }
   }
 });
 
