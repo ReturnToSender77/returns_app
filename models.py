@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import json
+from sqlalchemy.orm.attributes import flag_modified
 
 # Instantiate the database
 db = SQLAlchemy()
@@ -106,16 +107,15 @@ class Column(db.Model):
             
             cell_idx_str = str(cell_index-1)
             
-            if text:  # If text is not empty, add/update footnote
+            if text:
                 # Create a new dict to trigger SQLAlchemy change detection
-                new_footnotes = dict(self.cell_footnotes)
-                new_footnotes[cell_idx_str] = text
-                self.cell_footnotes = new_footnotes
-            elif cell_idx_str in self.cell_footnotes:  # If text is empty, remove footnote
+                self.cell_footnotes[cell_idx_str] = text
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(self, 'cell_footnotes')
+            elif cell_idx_str in self.cell_footnotes:
                 # Create a new dict to trigger SQLAlchemy change detection
-                new_footnotes = dict(self.cell_footnotes)
-                del new_footnotes[cell_idx_str]
-                self.cell_footnotes = new_footnotes
+                del self.cell_footnotes[cell_idx_str]
+                flag_modified(self, 'cell_footnotes')
     
     def get_footnote(self, cell_index):
         """
