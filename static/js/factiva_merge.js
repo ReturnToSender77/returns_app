@@ -1,257 +1,249 @@
-// Simple and direct factiva merge functionality
+/**
+ * Factiva Article Integration
+ * Handles merging Factiva article data with returns tables
+ */
 
-// Keep track of selected fields and table
-let factivaMergeState = {
-  tableId: null,
-  selectedFields: []
-};
+// FactivaMerge singleton object
+const factivaMerge = (function() {
+  // Private variables
+  let selectedFields = [];
+  let currentTableId = null;
+  let articlesByDate = {};
+  let hasLoadedArticles = false;
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('Factiva merge module loaded');
-  
-  // Get the current table ID
-  const tableSelect = document.getElementById('returnsTableSelectChron');
-  if (tableSelect && tableSelect.value) {
-    factivaMergeState.tableId = tableSelect.value;
-    console.log('Initial table ID:', factivaMergeState.tableId);
+  // Initialize when returns table is selected
+  function init(tableId) {
+    if (!tableId) return;
     
-    // Load articles for the initial table
-    loadFactivaArticles(factivaMergeState.tableId);
+    currentTableId = tableId;
+    console.log(`Initializing Factiva merge for table ID ${tableId}`);
+    
+    // Reset state
+    selectedFields = [];
+    articlesByDate = {};
+    hasLoadedArticles = false;
+    
+    // Check if we should enable the merge button
+    updateMergeButtonState();
+    
+    // Load articles for the selected table
+    loadArticlesForTable(tableId);
   }
   
-  // Listen for table selection changes
-  if (tableSelect) {
-    tableSelect.addEventListener('change', function() {
-      factivaMergeState.tableId = this.value;
-      console.log('Table ID updated:', factivaMergeState.tableId);
-      
-      // The table change handler in chron_tables.js will call loadFactivaArticles
-      updateMergeButtonState();
-    });
-  }
-  
-  // Hook up checkbox listeners
-  document.querySelectorAll('.factiva-field').forEach(checkbox => {
-    checkbox.addEventListener('change', function() {
-      updateSelectedFields();
-    });
-  });
-  
-  // Update button state initially
-  setTimeout(updateMergeButtonState, 200);
-});
-
-// Load Factiva articles for a specific table
-function loadFactivaArticles(tableId) {
-  if (!tableId) {
-    console.log('No table ID provided to load articles');
-    return;
-  }
-
-  console.log('Loading Factiva articles for table:', tableId);
-  
-  fetch(`/get_factiva_articles/${tableId}`)
-    .then(res => res.json())
-    .then(data => {
-      const ul = document.getElementById('factivaArticlesList');
-      if (!ul) {
-        console.error('Could not find factivaArticlesList element');
-        return;
-      }
-      
-      if (data.error) {
-        ul.innerHTML = `<li>Error: ${data.error}</li>`;
-        return;
-      }
-      
-      if (data.factiva_articles && data.factiva_articles.length > 0) {
-        console.log(`Found ${data.factiva_articles.length} Factiva articles`);
-        let content = '';
-        data.factiva_articles.forEach(article => {
-          content += `<li data-article-available="true"><strong>${article.headline}</strong> by ${article.author}</li>`;
+  // Load Factiva articles for a table and organize them by date
+  function loadArticlesForTable(tableId) {
+    console.log(`Loading Factiva articles for table ${tableId}`);
+    
+    // Show loading status
+    updateMergeStatus("Loading articles...", "info");
+    
+    fetch(`/get_factiva_metadata/${tableId}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          console.error(`Error loading articles: ${data.error}`);
+          updateMergeStatus(`Error: ${data.error}`, "danger");
+          return;
+        }
+        
+        const articles = data.articles || [];
+        console.log(`Loaded ${articles.length} Factiva articles`);
+        
+        // Group articles by date
+        articlesByDate = {};
+        articles.forEach(article => {
+          if (!article.publish_date) return;
+          
+          // Extract just the date part (ignore time)
+          const datePart = article.publish_date.split('T')[0];
+          
+          if (!articlesByDate[datePart]) {
+            articlesByDate[datePart] = [];
+          }
+          
+          articlesByDate[datePart].push(article);
         });
-        ul.innerHTML = content;
-      } else {
-        ul.innerHTML = '<li>No Factiva articles available</li>';
-      }
-      
-      // Update merge button state
-      updateMergeButtonState();
-    })
-    .catch(err => {
-      console.error("Error fetching factiva articles:", err);
-      const ul = document.getElementById('factivaArticlesList');
-      if (ul) {
-        ul.innerHTML = '<li>Error fetching articles</li>';
-      }
-    });
-}
-
-// Update the list of selected fields
-function updateSelectedFields() {
-  factivaMergeState.selectedFields = Array.from(
-    document.querySelectorAll('.factiva-field:checked')
-  ).map(cb => cb.value);
-  
-  console.log('Selected fields updated:', factivaMergeState.selectedFields);
-  updateMergeButtonState();
-  
-  // Update debug info if available
-  const debugInfoEl = document.getElementById('mergeDebugInfo');
-  if (debugInfoEl) {
-    const hasArticles = checkIfArticlesAvailable();
-    debugInfoEl.textContent = 
-      `Table ID: ${factivaMergeState.tableId}\n` +
-      `Has Articles: ${hasArticles}\n` +
-      `Selected Fields: ${factivaMergeState.selectedFields.join(', ')}\n` +
-      `Button Enabled: ${!document.getElementById('mergeFactivaData').disabled}`;
-  }
-}
-
-// Check if factiva articles are available
-function checkIfArticlesAvailable() {
-  const articleItems = document.querySelectorAll('#factivaArticlesList li');
-  if (articleItems.length === 0) return false;
-  
-  // If there's one item and it says "no articles", return false
-  if (articleItems.length === 1) {
-    const firstText = articleItems[0].textContent.toLowerCase();
-    if (firstText.includes('no factiva') || firstText.includes('no article')) {
-      return false;
-    }
+        
+        // Update status
+        if (articles.length > 0) {
+          const dateCount = Object.keys(articlesByDate).length;
+          updateMergeStatus(`Found ${articles.length} articles across ${dateCount} dates`, "success");
+          hasLoadedArticles = true;
+        } else {
+          updateMergeStatus("No Factiva articles found for this table", "warning");
+          hasLoadedArticles = false;
+        }
+        
+        // Update debug info
+        updateDebugInfo();
+        
+        // Update UI
+        displayArticleSummary(articlesByDate);
+        updateMergeButtonState();
+      })
+      .catch(error => {
+        console.error("Error fetching articles:", error);
+        updateMergeStatus(`Error: ${error.message}`, "danger");
+      });
   }
   
-  // Otherwise assume we have articles
-  return true;
-}
-
-// Update merge button state
-function updateMergeButtonState() {
-  const mergeButton = document.getElementById('mergeFactivaData');
-  if (!mergeButton) return;
-  
-  const hasArticles = checkIfArticlesAvailable();
-  const hasSelectedFields = factivaMergeState.selectedFields.length > 0;
-  const hasTable = !!factivaMergeState.tableId;
-  
-  const shouldEnable = hasTable && hasArticles && hasSelectedFields;
-  
-  console.log('Merge button state check:', { 
-    hasTable, hasArticles, hasSelectedFields, shouldEnable 
-  });
-  
-  mergeButton.disabled = !shouldEnable;
-  
-  if (!shouldEnable) {
-    mergeButton.classList.add('btn-disabled');
-  } else {
-    mergeButton.classList.remove('btn-disabled');
-  }
-}
-
-// The main merge function - called directly from HTML
-function performMerge() {
-  console.log('MERGE BUTTON CLICKED');
-  
-  // Basic validation
-  if (!factivaMergeState.tableId) {
-    alert('Please select a returns table first');
-    return;
-  }
-  
-  if (factivaMergeState.selectedFields.length === 0) {
-    alert('Please select at least one field to merge');
-    return;
-  }
-  
-  // Show merge in progress
-  const statusDiv = document.getElementById('mergeStatus');
-  if (statusDiv) {
-    statusDiv.textContent = 'Merging data... This may take a moment.';
-    statusDiv.className = 'alert alert-info mt-2';
-    statusDiv.style.display = 'block';
-  }
-  
-  console.log('Sending merge request with:', {
-    table_id: factivaMergeState.tableId,
-    selected_columns: factivaMergeState.selectedFields
-  });
-  
-  // Send the request
-  fetch('/merge_factiva_data', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      table_id: factivaMergeState.tableId,
-      selected_columns: factivaMergeState.selectedFields
-    })
-  })
-  .then(response => response.json())
-  .then(data => {
-    console.log('Server response:', data);
+  // Update the merge button state based on selections and article availability
+  function updateMergeButtonState() {
+    const mergeButton = document.getElementById('mergeFactivaData');
+    if (!mergeButton) return;
     
-    if (data.error) {
-      if (statusDiv) {
-        statusDiv.textContent = `Error: ${data.error}`;
-        statusDiv.className = 'alert alert-danger mt-2';
-      } else {
-        alert(`Error: ${data.error}`);
-      }
+    const hasSelectedFields = selectedFields.length > 0;
+    const hasTable = currentTableId !== null;
+    
+    // Only enable the button if we have articles, a table is selected, and fields are selected
+    const shouldEnable = hasLoadedArticles && hasTable && hasSelectedFields;
+    
+    mergeButton.disabled = !shouldEnable;
+    if (shouldEnable) {
+      mergeButton.classList.remove('btn-disabled');
+    } else {
+      mergeButton.classList.add('btn-disabled');
+    }
+    
+    // Update debug info
+    updateDebugInfo();
+  }
+  
+  // Update selected fields based on checkboxes
+  function updateSelectedFields() {
+    selectedFields = [];
+    document.querySelectorAll('.factiva-field:checked').forEach(checkbox => {
+      selectedFields.push(checkbox.value);
+    });
+    
+    console.log('Selected fields updated:', selectedFields);
+    updateMergeButtonState();
+    updateDebugInfo();
+  }
+  
+  // Display a summary of available articles
+  function displayArticleSummary(articlesByDate) {
+    const articlesList = document.getElementById('factivaArticlesList');
+    if (!articlesList) return;
+    
+    if (Object.keys(articlesByDate).length === 0) {
+      articlesList.innerHTML = '<li>No articles available</li>';
       return;
     }
     
-    // Success! Show message
-    if (statusDiv) {
-      statusDiv.textContent = data.message;
-      statusDiv.className = 'alert alert-success mt-2';
-    } else {
-      alert(`Success: ${data.message}`);
+    let html = '';
+    // Sort dates chronologically
+    const sortedDates = Object.keys(articlesByDate).sort();
+    
+    for (const date of sortedDates) {
+      const articles = articlesByDate[date];
+      const formattedDate = new Date(date).toLocaleDateString();
+      
+      html += `<li><strong>${formattedDate}</strong>: ${articles.length} article${articles.length !== 1 ? 's' : ''}</li>`;
     }
     
-    // Uncheck all fields
-    document.querySelectorAll('.factiva-field:checked').forEach(cb => {
-      cb.checked = false;
-    });
-    updateSelectedFields();
-    
-    // Refresh the table display
-    refreshChronTable();
-    
-    // Hide the status message after a delay
-    if (statusDiv) {
-      setTimeout(() => {
-        statusDiv.style.display = 'none';
-      }, 5000);
-    }
-  })
-  .catch(error => {
-    console.error('Error during merge operation:', error);
-    
-    if (statusDiv) {
-      statusDiv.textContent = 'Error merging data. See console for details.';
-      statusDiv.className = 'alert alert-danger mt-2';
-    } else {
-      alert('Error merging data. See console for details.');
-    }
-  });
-}
-
-// Refresh the table after a merge
-function refreshChronTable() {
-  console.log('Refreshing chronology table');
+    articlesList.innerHTML = html;
+  }
   
-  // The simplest way is to trigger the change event on the table selector
+  // Update merge status message
+  function updateMergeStatus(message, type) {
+    const statusEl = document.getElementById('mergeStatus');
+    if (!statusEl) return;
+    
+    statusEl.textContent = message;
+    statusEl.className = `alert alert-${type}`;
+    statusEl.style.display = message ? 'block' : 'none';
+  }
+  
+  // Update debug info
+  function updateDebugInfo() {
+    const debugEl = document.getElementById('mergeDebugInfo');
+    if (!debugEl) return;
+    
+    const debug = {
+      currentTableId,
+      selectedFields,
+      articleDates: Object.keys(articlesByDate),
+      articleCount: Object.values(articlesByDate).reduce((sum, arr) => sum + arr.length, 0),
+      hasLoadedArticles,
+      mergeButtonEnabled: !document.getElementById('mergeFactivaData')?.disabled
+    };
+    
+    debugEl.textContent = JSON.stringify(debug, null, 2);
+  }
+  
+  // Perform the merge operation
+  function performMerge() {
+    if (!currentTableId || selectedFields.length === 0 || !hasLoadedArticles) {
+      updateMergeStatus("Cannot merge: missing required data", "danger");
+      return;
+    }
+    
+    console.log(`Performing merge for table ${currentTableId} with fields:`, selectedFields);
+    updateMergeStatus("Merging Factiva data...", "info");
+    
+    // Call the server to perform the merge
+    fetch('/add_factiva_column', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        table_id: currentTableId,
+        selected_fields: selectedFields
+      }),
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.error) {
+        updateMergeStatus(`Error: ${data.error}`, "danger");
+        return;
+      }
+      
+      console.log('Merge successful:', data);
+      updateMergeStatus(`Success! ${data.message}`, "success");
+      
+      // Reload the returns table to show the new columns
+      if (window.loadReturnTable) {
+        window.loadReturnTable(currentTableId);
+      }
+    })
+    .catch(error => {
+      console.error('Merge error:', error);
+      updateMergeStatus(`Error: ${error.message}`, "danger");
+    });
+  }
+  
+  // Public API
+  return {
+    init,
+    updateSelectedFields,
+    perform: performMerge
+  };
+})();
+
+// Set up global access
+window.factivaMerge = factivaMerge;
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  // Set up table selection listener
   const tableSelect = document.getElementById('returnsTableSelectChron');
   if (tableSelect) {
-    const event = new Event('change');
-    tableSelect.dispatchEvent(event);
+    tableSelect.addEventListener('change', function() {
+      if (this.value) {
+        factivaMerge.init(this.value);
+      }
+    });
+    
+    // Initialize with current value if present
+    if (tableSelect.value) {
+      factivaMerge.init(tableSelect.value);
+    }
   }
-}
-
-// Expose the public API
-window.factivaMerge = {
-  perform: performMerge,
-  updateSelectedFields: updateSelectedFields
-};
-window.loadFactivaArticles = loadFactivaArticles;
+});

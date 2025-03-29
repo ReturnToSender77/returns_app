@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, send_file
-from models import db, ReturnsTable, Column, DateCell, FactivaArticle, DateColumn, TextColumn, TextCell
+from models import db, ReturnsTable, Column, DateCell, FactivaArticle, DateColumn, TextColumn, TextCell, FactivaColumn, FactivaCell
 from utils import extract_data_file, convert_ReturnsTable_to_html
 from parse_html_articles import parse_html_articles  
 import tempfile
@@ -275,16 +275,19 @@ def get_factiva_metadata(table_id):
         articles = FactivaArticle.query.filter_by(returns_table_id=table_id).all()
         
         # Include all available metadata fields
-        articles_data = [{
-            "id": article.id,
-            "headline": article.headline,
-            "author": article.author,
-            "word_count": article.word_count,
-            "publish_date": article.publish_date.isoformat() if article.publish_date else None,
-            "source": article.source,
-            # Truncate content for preview
-            "content_preview": article.content[:100] + "..." if article.content and len(article.content) > 100 else article.content
-        } for article in articles]
+        articles_data = []
+        for article in articles:
+            article_data = {
+                "id": article.id,
+                "headline": article.headline,
+                "author": article.author if article.author else "",
+                "word_count": article.word_count if article.word_count else 0,
+                "publish_date": article.publish_date.isoformat() if article.publish_date else None,
+                "source": article.source if article.source else "",
+                # Truncate content for preview
+                "content_preview": article.content[:100] + "..." if article.content and len(article.content) > 100 else (article.content or "")
+            }
+            articles_data.append(article_data)
         
         # Get available columns for the table
         columns = [
@@ -301,6 +304,8 @@ def get_factiva_metadata(table_id):
             'columns': columns
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # New route to merge factiva data with returns table
@@ -608,6 +613,7 @@ def export_styled_excel():
     Expects JSON with:
     - title: String with the Excel title
     - data: Array of arrays representing table data (first row is headers)
+    - selected_factiva_fields: Array of field names to include from Factiva metadata
     
     Returns:
     - Excel file as attachment
@@ -615,11 +621,24 @@ def export_styled_excel():
     try:
         data = request.json
         if not data or 'data' not in data:
-            return jsonify({"error": "No data provided"}), 400
+            return jsonify({"error": "Missing required data"}), 400
             
         table_data = data.get('data', [])
         title = data.get('title', 'Returns Data Chronology')
         footnotes = data.get('footnotes', {})  # Get footnotes if provided
+        table_id = data.get('table_id')  # Get table ID if provided
+        selected_factiva_fields = data.get('selected_factiva_fields', [])  # Get selected Factiva fields
+        
+        print(f"Export request: title={title}, table_id={table_id}, selected_fields={selected_factiva_fields}")
+        
+        # Check if we need to process Factiva data
+        if table_id:
+            # Find FactivaColumns and add their data to the export
+            table_data = process_factiva_data_for_export(
+                table_data, 
+                table_id, 
+                selected_factiva_fields
+            )
         
         # Generate Excel file with footnotes
         excel_file = create_excel_from_table_data(table_data, title, footnotes=footnotes)
@@ -634,4 +653,388 @@ def export_styled_excel():
         
     except Exception as e:
         print(f"Error generating styled Excel: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+def process_factiva_data_for_export(table_data, table_id, selected_factiva_fields=None):
+    """
+    Process Factiva data for Excel export with enhanced metadata.
+    
+    Performs a proper outer merge between the returns table data and Factiva articles,
+    ensuring all data appears in integrated rows with both returns data and article metadata.
+    
+    Args:
+        table_data: 2D array of data (first row is headers)
+        table_id: ID of the ReturnsTable
+        selected_factiva_fields: List of field names to include from Factiva articles
+        
+    Returns:
+        Updated table_data with merged factiva article metadata
+    """
+    try:
+        from datetime import datetime
+        
+        # Default fields if none are selected
+        if not selected_factiva_fields:
+            selected_factiva_fields = ["headline", "author", "source", "word_count", "publish_date"]
+            
+        print(f"Processing Factiva data with fields: {selected_factiva_fields}")
+        
+        # Find the returns table
+        returns_table = ReturnsTable.query.get(table_id)
+        if not returns_table:
+            print(f"Table {table_id} not found")
+            return table_data
+            
+        # Look for FactivaColumns
+        factiva_columns = []
+        for column in returns_table.columns:
+            if isinstance(column, FactivaColumn):
+                factiva_columns.append(column)
+                
+        if not factiva_columns:
+            print("No FactivaColumns found")
+            return table_data
+            
+        # Find date column to use for the merge
+        date_column = None
+        date_column_index = None
+        for column in returns_table.columns:
+            if isinstance(column, DateColumn):
+                date_column = column
+                # Find the index of this column in table_data
+                for i, header in enumerate(table_data[0]):
+                    if header == column.name:
+                        date_column_index = i
+                        break
+                break
+                
+        if not date_column or date_column_index is None:
+            print("No DateColumn found for merge")
+            return table_data
+            
+        print(f"Found DateColumn at index {date_column_index}: {date_column.name}")
+        
+        # Extract headers from the original data
+        original_headers = table_data[0]
+        
+        # Create a mapping of all date rows in the original table
+        # This will let us look up rows by their date value
+        date_to_row_map = {}
+        row_data_map = {}  # Store all row data for each date
+        
+        for row_idx in range(1, len(table_data)):
+            row_data = table_data[row_idx]
+            date_value = row_data[date_column_index]
+            if date_value:
+                try:
+                    # Parse the date string from the table
+                    if isinstance(date_value, str):
+                        # Handle common date formats
+                        if '-' in date_value:
+                            # YYYY-MM-DD format
+                            date_obj = datetime.strptime(date_value, '%Y-%m-%d').date()
+                        elif '/' in date_value:
+                            # MM/DD/YYYY format
+                            date_obj = datetime.strptime(date_value, '%m/%d/%Y').date()
+                        else:
+                            # Just store as string if we can't parse
+                            date_obj = date_value
+                    else:
+                        # If it's already a datetime object
+                        date_obj = date_value.date() if hasattr(date_value, 'date') else date_value
+                    
+                    date_str = str(date_obj)
+                    date_to_row_map[date_str] = row_idx
+                    row_data_map[date_str] = row_data  # Store the full row data
+                    
+                except Exception as e:
+                    print(f"Error parsing date '{date_value}': {str(e)}")
+        
+        print(f"Found {len(date_to_row_map)} unique dates in date column")
+        
+        # Collect all factiva articles with their metadata
+        all_factiva_articles = []
+        
+        # First, gather all articles and their metadata from factiva cells
+        for factiva_column in factiva_columns:
+            for cell_idx, cell in enumerate(factiva_column.cells):
+                if not isinstance(cell, FactivaCell) or not cell.articles:
+                    continue
+                
+                articles = cell.articles
+                
+                # For each article, store it with cell index and the column it came from
+                for article in articles:
+                    if not article.publish_date:
+                        continue
+                        
+                    all_factiva_articles.append({
+                        'article': article,
+                        'cell_idx': cell_idx,
+                        'column': factiva_column,
+                        'publish_date': article.publish_date.date() if hasattr(article.publish_date, 'date') else article.publish_date
+                    })
+        
+        # Sort articles by date for consistent output
+        all_factiva_articles.sort(key=lambda x: x['publish_date'])
+        
+        print(f"Collected {len(all_factiva_articles)} total factiva articles for merging")
+        
+        # Create headers for the factiva metadata columns
+        factiva_column_headers = []
+        
+        # Map selected fields to display headers
+        field_to_header = {
+            "headline": "Factiva - Headline",
+            "author": "Factiva - Author",
+            "source": "Factiva - Source",
+            "word_count": "Factiva - Word Count",
+            "publish_date": "Factiva - Publish Date",
+            "content": "Factiva - Content",
+            "content_preview": "Factiva - Content Preview"
+        }
+        
+        # Only include headers for selected fields
+        for field in selected_factiva_fields:
+            if field in field_to_header:
+                factiva_column_headers.append(field_to_header[field])
+        
+        # If no valid fields were selected, use defaults
+        if not factiva_column_headers:
+            factiva_column_headers = [
+                "Factiva - Headline",
+                "Factiva - Publish Date"
+            ]
+        
+        # Create the new merged table data, starting with extended headers
+        merged_table = [original_headers + factiva_column_headers]
+        
+        # Track which dates we've already processed from the original table
+        processed_dates = set()
+        
+        # First pass: Process all articles, creating rows that include BOTH returns data and article metadata
+        for article_info in all_factiva_articles:
+            article = article_info['article']
+            article_date = article_info['publish_date']
+            date_str = str(article_date)
+            
+            # Prepare article metadata based on selected fields
+            article_metadata = []
+            for field in selected_factiva_fields:
+                if field == "headline":
+                    article_metadata.append(article.headline or "")
+                elif field == "author":
+                    article_metadata.append(article.author or "")
+                elif field == "source":
+                    article_metadata.append(article.source or "")
+                elif field == "word_count":
+                    article_metadata.append(str(article.word_count) if article.word_count else "")
+                elif field == "publish_date":
+                    article_metadata.append(article.publish_date.strftime("%Y-%m-%d") if article.publish_date else "")
+                elif field == "content":
+                    article_metadata.append(article.content or "")
+                elif field == "content_preview":
+                    # Truncate content for preview
+                    content_preview = article.content[:100] + "..." if article.content and len(article.content) > 100 else (article.content or "")
+                    article_metadata.append(content_preview)
+            
+            # If this date exists in our returns table, merge the row data with article metadata
+            if date_str in row_data_map:
+                # Get the original row data for this date
+                returns_row = row_data_map[date_str]
+                # Combine returns data with factiva metadata
+                merged_row = list(returns_row) + article_metadata
+                # Add to the merged table
+                merged_table.append(merged_row)
+                # Mark this date as processed
+                processed_dates.add(date_str)
+            else:
+                # This is an article with no matching returns data row
+                # Create a new row with empty cells for returns data, except for the date
+                empty_returns_data = [""] * len(original_headers)
+                empty_returns_data[date_column_index] = article_date.strftime("%Y-%m-%d") if hasattr(article_date, 'strftime') else str(article_date)
+                # Combine empty returns data with factiva metadata
+                merged_row = empty_returns_data + article_metadata
+                # Add to the merged table
+                merged_table.append(merged_row)
+        
+        # Second pass: Add any remaining returns rows that don't have matching articles
+        for row_idx in range(1, len(table_data)):
+            row_data = table_data[row_idx]
+            date_value = row_data[date_column_index]
+            
+            if not date_value:
+                # Skip rows without a valid date
+                continue
+                
+            try:
+                # Get the date in a consistent format
+                if isinstance(date_value, str):
+                    if '-' in date_value:
+                        date_obj = datetime.strptime(date_value, '%Y-%m-%d').date()
+                    elif '/' in date_value:
+                        date_obj = datetime.strptime(date_value, '%m/%d/%Y').date()
+                    else:
+                        date_obj = date_value
+                else:
+                    date_obj = date_value.date() if hasattr(date_value, 'date') else date_value
+                
+                date_str = str(date_obj)
+                
+                # If we haven't already processed this date, add it now
+                if date_str not in processed_dates:
+                    # Get the returns data
+                    returns_row = row_data
+                    # Add empty factiva metadata
+                    empty_metadata = [""] * len(factiva_column_headers)
+                    # Combine and add to the merged table
+                    merged_row = list(returns_row) + empty_metadata
+                    merged_table.append(merged_row)
+                    # Mark as processed
+                    processed_dates.add(date_str)
+            except Exception as e:
+                print(f"Error processing date '{date_value}' in second pass: {str(e)}")
+        
+        print(f"Merge complete: {len(merged_table)-1} total rows in the final table")
+        
+        return merged_table
+        
+    except Exception as e:
+        print(f"Error processing Factiva data for export: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return table_data  # Return the original data in case of error
+
+@main_blueprint.route("/add_factiva_column", methods=["POST"])
+def add_factiva_column():
+    """
+    Add a FactivaColumn to a ReturnsTable that stores FactivaArticles grouped by their publish date.
+    
+    The column will display a summary of articles on each date (e.g., "5 Articles")
+    and store the actual article data for use in Excel exports.
+    
+    POST Parameters:
+        - table_id: ID of the returns table
+        - selected_fields: List of article fields to include
+        
+    Returns:
+        JSON with success/error message
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        table_id = data.get('table_id')
+        selected_fields = data.get('selected_fields', [])
+        
+        print(f"ADD FACTIVA COLUMN REQUEST: table_id={table_id}, fields={selected_fields}")
+        
+        if not table_id or not selected_fields:
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        # Get the returns table
+        returns_table = ReturnsTable.query.get(table_id)
+        if not returns_table:
+            return jsonify({"error": f"Returns table not found with ID {table_id}"}), 404
+        
+        print(f"Processing table: {returns_table.name} (ID: {returns_table.id})")
+        
+        # Find the date column in the returns table
+        date_column = None
+        for col in returns_table.columns:
+            if isinstance(col, DateColumn):
+                date_column = col
+                print(f"Found date column: {col.name}")
+                break
+                
+        if not date_column:
+            return jsonify({"error": "No date column found in returns table"}), 400
+        
+        # Get all factiva articles for this table
+        articles = FactivaArticle.query.filter_by(returns_table_id=table_id).all()
+        if not articles:
+            return jsonify({"error": "No Factiva articles found for this table"}), 400
+            
+        print(f"Found {len(articles)} Factiva articles for table ID {table_id}")
+        
+        # Group articles by date (date part only, ignore time)
+        articles_by_date = {}
+        for article in articles:
+            if not article.publish_date:
+                continue
+                
+            # Use only the date part (ignore time) for matching
+            article_date = article.publish_date.date()
+            if article_date not in articles_by_date:
+                articles_by_date[article_date] = []
+            articles_by_date[article_date].append(article)
+        
+        # Create a new FactivaColumn
+        column_name = "Factiva Articles"
+        factiva_column = FactivaColumn(
+            name=column_name,
+            returns_table_id=table_id
+        )
+        db.session.add(factiva_column)
+        db.session.flush()  # Get the column ID
+        
+        print(f"Created FactivaColumn '{column_name}' (ID: {factiva_column.id})")
+        
+        # For each cell in the date column, create a corresponding FactivaCell
+        cell_count = 0
+        articles_linked = 0
+        
+        for date_cell in date_column.cells:
+            if not isinstance(date_cell, DateCell) or not date_cell.value:
+                # Create empty cell for consistency
+                empty_cell = FactivaCell(
+                    column_id=factiva_column.id,
+                    date_value=None,
+                    article_count=0
+                )
+                db.session.add(empty_cell)
+                continue
+                
+            date_value = date_cell.value.date()
+            matching_articles = articles_by_date.get(date_value, [])
+            
+            # Create a FactivaCell with the articles for this date
+            factiva_cell = FactivaCell(
+                column_id=factiva_column.id,
+                date_value=date_cell.value,
+                article_count=len(matching_articles)
+            )
+            db.session.add(factiva_cell)
+            db.session.flush()  # Get the cell ID
+            
+            # Link articles to this cell
+            for article in matching_articles:
+                article.cell_id = factiva_cell.id
+                articles_linked += 1
+            
+            # Set a representative footnote
+            factiva_cell.set_representative_footnote()
+            
+            cell_count += 1
+        
+        # Commit all changes
+        db.session.commit()
+        
+        print(f"Created {cell_count} FactivaCells with {articles_linked} linked articles")
+        
+        return jsonify({
+            "success": True,
+            "message": f"Added Factiva Column with {articles_linked} articles across {cell_count} cells.",
+            "column_name": column_name,
+            "column_id": factiva_column.id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        print("=============== ADD FACTIVA COLUMN ERROR ================")
+        traceback.print_exc()
+        print("==========================================")
+        print(f"Error adding factiva column: {str(e)}")
         return jsonify({"error": str(e)}), 500

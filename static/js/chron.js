@@ -44,22 +44,28 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    // Fetch factiva articles for this table
-    fetchFactivaArticles(tableId);
+    // Fetch factiva articles for this table - use the new metadata endpoint
+    fetchFactivaMetadata(tableId);
   });
   
-  // DIRECTLY attach click handler to merge button - this is the most important part!
+  // Use the window.factivaMerge.perform method for actual processing
   mergeButton.onclick = function(event) {
     console.log('Merge button clicked directly!');
     event.preventDefault();
-    processMergeRequest();
+    
+    // Use the factivaMerge object's method if available, otherwise fall back to our local function
+    if (window.factivaMerge && typeof window.factivaMerge.perform === 'function') {
+      window.factivaMerge.perform();
+    } else {
+      processMergeRequest();
+    }
   };
   
   // Set initial table ID if a table is already selected on page load
   if (tableSelector.value) {
     currentTableId = tableSelector.value;
     console.log('Initial table ID from selector:', currentTableId);
-    fetchFactivaArticles(currentTableId);
+    fetchFactivaMetadata(currentTableId);
   }
   
   // Force first update of merge button state
@@ -90,18 +96,18 @@ function processMergeRequest() {
   // Show merge in progress
   const statusDiv = document.getElementById('mergeStatus');
   if (statusDiv) {
-    statusDiv.textContent = 'Merging data... This may take a moment.';
+    statusDiv.textContent = 'Adding Factiva column... This may take a moment.';
     statusDiv.className = 'alert alert-info mt-2';
     statusDiv.style.display = 'block';
   }
   
-  // Perform the merge
-  fetch('/merge_factiva_data', {
+  // Use the new /add_factiva_column endpoint with the selected fields
+  fetch('/add_factiva_column', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       table_id: currentTableId,
-      selected_columns: selectedFactivaFields
+      selected_fields: selectedFactivaFields
     })
   })
   .then(response => {
@@ -117,10 +123,10 @@ function processMergeRequest() {
         statusDiv.textContent = `Error: ${data.error}`;
         statusDiv.className = 'alert alert-danger mt-2';
       } else {
-        statusDiv.textContent = data.message;
+        statusDiv.textContent = data.message || "Factiva column added successfully";
         statusDiv.className = 'alert alert-success mt-2';
         
-        // Refresh the table
+        // Refresh the returns table to show the new column
         refreshReturnsTable();
         
         // Uncheck all fields
@@ -130,27 +136,22 @@ function processMergeRequest() {
         selectedFactivaFields = [];
         updateMergeButtonState();
       }
-      
-      // Hide the status message after a delay
-      setTimeout(() => {
-        statusDiv.style.display = 'none';
-      }, 5000);
     }
   })
   .catch(error => {
-    console.error('Error during merge operation:', error);
+    console.error('Error adding factiva column:', error);
     if (statusDiv) {
-      statusDiv.textContent = 'Error merging data. See console for details.';
+      statusDiv.textContent = 'Error adding Factiva column. See console for details.';
       statusDiv.className = 'alert alert-danger mt-2';
     }
   });
 }
 
-// Fetch factiva articles for a specific table
-function fetchFactivaArticles(tableId) {
+// Fetch factiva metadata for a specific table
+function fetchFactivaMetadata(tableId) {
   if (!tableId) return;
   
-  fetch(`/get_factiva_articles/${tableId}`)
+  fetch(`/get_factiva_metadata/${tableId}`)
     .then(res => res.json())
     .then(data => {
       const ul = document.getElementById('factivaArticlesList');
@@ -162,15 +163,43 @@ function fetchFactivaArticles(tableId) {
         return;
       }
       
-      // Update the articles list
-      if (data.factiva_articles && data.factiva_articles.length > 0) {
+      // Group articles by date
+      const articlesByDate = {};
+      const articles = data.articles || [];
+      
+      articles.forEach(article => {
+        if (!article.publish_date) return;
+        
+        // Extract just the date part
+        const datePart = article.publish_date.split('T')[0];
+        
+        if (!articlesByDate[datePart]) {
+          articlesByDate[datePart] = [];
+        }
+        
+        articlesByDate[datePart].push(article);
+      });
+      
+      // Update the articles list with grouped counts
+      if (Object.keys(articlesByDate).length > 0) {
         let content = '';
-        data.factiva_articles.forEach(article => {
-          content += `<li data-article-available="true"><strong>${article.headline}</strong> by ${article.author}</li>`;
+        
+        // Sort dates chronologically
+        const sortedDates = Object.keys(articlesByDate).sort();
+        
+        sortedDates.forEach(date => {
+          const articles = articlesByDate[date];
+          const formattedDate = new Date(date).toLocaleDateString();
+          
+          content += `<li data-article-available="true">
+                      <strong>${formattedDate}</strong>: 
+                      ${articles.length} article${articles.length !== 1 ? 's' : ''}
+                      </li>`;
         });
+        
         ul.innerHTML = content;
         hasArticles = true;
-        console.log(`Loaded ${data.factiva_articles.length} factiva articles`);
+        console.log(`Loaded ${articles.length} factiva articles across ${sortedDates.length} dates`);
       } else {
         ul.innerHTML = '<li>No factiva articles available</li>';
         hasArticles = false;
@@ -180,7 +209,7 @@ function fetchFactivaArticles(tableId) {
       updateMergeButtonState();
     })
     .catch(err => {
-      console.error("Error fetching factiva articles:", err);
+      console.error("Error fetching factiva metadata:", err);
       document.getElementById('factivaArticlesList').innerHTML = '<li>Error fetching articles</li>';
       hasArticles = false;
       updateMergeButtonState();
@@ -213,6 +242,11 @@ function checkboxChangeHandler() {
   
   // Update merge button state
   updateMergeButtonState();
+  
+  // Also update the factivaMerge object's selected fields
+  if (window.factivaMerge && typeof window.factivaMerge.updateSelectedFields === 'function') {
+    window.factivaMerge.updateSelectedFields();
+  }
 }
 
 // Helper function to update the merge button state
@@ -238,12 +272,6 @@ function updateMergeButtonState() {
       hasRealArticles = true;
     }
   });
-  
-  if (articleItems.length > 0 && !hasRealArticles) {
-    // Try a different detection method - if there are articles and the first one doesn't say "no"
-    const firstText = articleItems[0].textContent.toLowerCase();
-    hasRealArticles = !firstText.includes('no factiva') && !firstText.includes('no article');
-  }
   
   hasArticles = hasArticles || hasRealArticles;
   
@@ -290,7 +318,13 @@ function updateMergeButtonState() {
 function refreshReturnsTable() {
   if (!currentTableId) return;
   
-  // Same code as the table load in the select change event
+  // Use the global loadReturnTable function if available
+  if (typeof window.loadReturnTable === 'function') {
+    window.loadReturnTable(currentTableId);
+    return;
+  }
+  
+  // Otherwise use our original implementation
   fetch(`/get_table/${currentTableId}`)
     .then(response => response.json())
     .then(data => {
@@ -334,9 +368,14 @@ function refreshReturnsTable() {
           if(cells.length > 0) {
             rowsHtml += '<tr>';
             cells.forEach(cell => {
-              // Check for ACD attribute in date cells
+              // Check for special cell types
               const isAcd = cell.getAttribute('data-acd') === '1';
-              const cellClass = isAcd ? 'acd-cell' : '';
+              const isFactivaCell = cell.classList.contains('factiva-cell');
+              
+              let cellClass = '';
+              if (isAcd) cellClass = 'acd-cell';
+              if (isFactivaCell) cellClass = 'factiva-cell';
+              
               rowsHtml += `<td class="${cellClass}">${cell.textContent}</td>`;
             });
             rowsHtml += '</tr>';
@@ -351,10 +390,17 @@ function refreshReturnsTable() {
       
       // Reinitialize footnote system after table refresh
       setTimeout(() => {
-        initFootnoteSystem();
+        if (typeof window.initFootnoteSystem === 'function') {
+          window.initFootnoteSystem();
+        }
       }, 300);
     })
     .catch(error => {
       console.error('Error refreshing table data:', error);
     });
 }
+
+// Make functions globally available
+window.updateMergeButtonState = updateMergeButtonState;
+window.refreshReturnsTable = refreshReturnsTable;
+window.fetchFactivaMetadata = fetchFactivaMetadata;

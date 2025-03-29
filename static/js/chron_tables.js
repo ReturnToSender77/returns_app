@@ -108,15 +108,32 @@ function loadReturnTable(tableId) {
           rowsHtml += '<tr>';
           
           cells.forEach((cell, idx) => {
+            // Check for Factiva cell and handle appropriately
+            const isFactivaCell = cell.classList.contains('factiva-cell');
+            const cellValue = cell.textContent;
+            
             // Store the data in our column objects
             if (idx < returnTableColumns.length) {
-              returnTableColumns[idx].data.push(cell.textContent);
+              returnTableColumns[idx].data.push(cellValue);
+              
+              // If this is a Factiva cell, mark it in our column data for special handling
+              if (isFactivaCell) {
+                if (!returnTableColumns[idx].isFactivaColumn) {
+                  returnTableColumns[idx].isFactivaColumn = true;
+                  returnTableColumns[idx].articleCounts = [];
+                }
+                
+                // Store the article count for reference
+                const articleCount = cell.getAttribute('data-article-count') || '0';
+                returnTableColumns[idx].articleCounts.push(articleCount);
+              }
             }
             
             // Check for ACD attribute in date cells
             const isAcd = cell.getAttribute('data-acd') === '1';
-            const cellClass = isAcd ? 'acd-cell' : '';
-            rowsHtml += `<td class="${cellClass}">${cell.textContent}</td>`;
+            const cellClass = isAcd ? 'acd-cell' : (isFactivaCell ? 'factiva-cell' : '');
+            
+            rowsHtml += `<td class="${cellClass}" ${isFactivaCell ? 'data-article-count="' + cell.getAttribute('data-article-count') + '"' : ''}>${cellValue}</td>`;
           });
           
           rowsHtml += '</tr>';
@@ -133,9 +150,9 @@ function loadReturnTable(tableId) {
       
       console.log('Loaded returns table columns:', returnTableColumns.length);
       
-      // Also make sure factiva articles are loaded
-      if (window.loadFactivaArticles) {
-        window.loadFactivaArticles(tableId);
+      // Initialize Factiva articles
+      if (window.factivaMerge && window.factivaMerge.init) {
+        window.factivaMerge.init(tableId);
       }
       
       // Initialize footnote system (which now also handles column adding)
@@ -406,6 +423,21 @@ function exportChronTableToStyledExcel() {
     }
   }
   
+  // Get the current table ID for Factiva data processing
+  const tableId = document.getElementById('returnsTableSelectChron').value;
+
+  // Get selected Factiva metadata fields if available from factivaMerge
+  let selectedFactivaFields = [];
+  if (window.factivaMerge && window.selectedFactivaFields) {
+    selectedFactivaFields = window.selectedFactivaFields;
+  } else if (window.factivaMerge) {
+    // Try to get it from checkboxes
+    const checkboxes = document.querySelectorAll('.factiva-field:checked');
+    selectedFactivaFields = Array.from(checkboxes).map(checkbox => checkbox.value);
+  }
+  
+  console.log("Selected Factiva fields for export:", selectedFactivaFields);
+  
   // Make request to server-side API to generate the Excel file
   fetch('/export_styled_excel', {
     method: 'POST',
@@ -415,7 +447,9 @@ function exportChronTableToStyledExcel() {
     body: JSON.stringify({
       title: title,
       data: tableData,
-      footnotes: footnotes
+      footnotes: footnotes,
+      table_id: tableId,  // This is critical for Factiva metadata merging
+      selected_factiva_fields: selectedFactivaFields  // Pass selected fields to the server
     }),
   })
   .then(response => {

@@ -21,7 +21,7 @@ def convert_string_data(value):
         return ""
                 
     # Clean the string
-    clean_value = value.strip()
+    clean_value = value.strip() if isinstance(value, str) else str(value)
     
     # Check for empty string
     if not clean_value or clean_value == "N/A":
@@ -48,6 +48,68 @@ def convert_string_data(value):
     # If all conversions fail, return the original string
     return clean_value
 
+def filter_factiva_headers(headers):
+    """
+    Filter out the "Factiva Articles" column from headers while preserving factiva metadata columns
+    
+    Args:
+        headers: List of column headers
+        
+    Returns:
+        List of filtered headers
+    """
+    # Keep all Factiva metadata columns (like "Factiva - Headline") but remove the generic "Factiva Articles" column
+    return [h for h in headers if h != "Factiva Articles" and not h.startswith("Factiva Articles - ")]
+
+def create_excel_from_table_data(table_data, title="Returns Data Chronology", footnotes=None):
+    """
+    Create a styled Excel file from table data
+    
+    Args:
+        table_data: 2D array of data (first row is headers)
+        title: Title for the Excel file
+        footnotes: Dictionary of footnotes
+        
+    Returns:
+        BytesIO object containing the Excel file
+    """
+    # Create workbook and sheet
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Chronology"
+    
+    if footnotes is None:
+        footnotes = {}
+    
+    # Filter out any "Factiva Articles" columns from headers
+    if table_data and len(table_data) > 0:
+        headers = table_data[0]
+        
+        # Identify "Factiva Articles" column indices to remove
+        indices_to_keep = [i for i, h in enumerate(headers) if h != "Factiva Articles"]
+        
+        # Create new filtered data without the "Factiva Articles" column
+        filtered_data = []
+        filtered_data.append([headers[i] for i in indices_to_keep])
+        
+        # Copy rows but skip the "Factiva Articles" column
+        for row in table_data[1:]:
+            filtered_row = [row[i] if i < len(row) else "" for i in indices_to_keep]
+            filtered_data.append(filtered_row)
+            
+        # Use filtered data for the rest of the process
+        table_data = filtered_data
+    
+    # Format the table with the data and footnotes
+    format_excel_table(ws, table_data, title, footnotes)
+    
+    # Create a BytesIO object to save the workbook
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return output
+
 def format_excel_table(worksheet, data, title="Returns Data Chronology", footnotes=None, include_col_numbers=True):
     """
     Format the Excel worksheet with styling and apply footnotes
@@ -62,8 +124,6 @@ def format_excel_table(worksheet, data, title="Returns Data Chronology", footnot
     Returns:
         Formatted worksheet
     """
-
-
     # Process footnotes dictionary - convert from element_id format to simpler format
     processed_footnotes = {}
     if footnotes:
@@ -98,9 +158,11 @@ def format_excel_table(worksheet, data, title="Returns Data Chronology", footnot
 
     # Detect significance indicator columns (columns containing only "*", "**", "***", "N/A" or empty)
     significance_cols = []
-    for col_idx in range(len(data[0])):
+    for col_idx in range(len(data[0])) if data and len(data) > 0 and len(data[0]) > 0 else []:
         is_significance_col = True
         for row_idx in range(1, len(data)):  # Skip header row
+            if row_idx >= len(data) or col_idx >= len(data[row_idx]):
+                continue
             cell_value = str(data[row_idx][col_idx]).strip() if data[row_idx][col_idx] is not None else ""
             if cell_value not in ["*", "**", "***", "N/A", ""]:
                 is_significance_col = False
@@ -169,10 +231,10 @@ def format_excel_table(worksheet, data, title="Returns Data Chronology", footnot
             worksheet.column_dimensions[spacer_col].width = 3
 
     # Add column numbers if requested
-    if include_col_numbers:
+    if include_col_numbers and data and len(data) > 0:
         current_row += 1
         output_col = 1
-        for i, header in enumerate(headers):
+        for i, header in enumerate(data[0]):
             if i in significance_cols:
                 continue
             col_idx = output_col
@@ -237,33 +299,3 @@ def format_excel_table(worksheet, data, title="Returns Data Chronology", footnot
             current_row += 1
 
     return worksheet
-
-def create_excel_from_table_data(table_data, title="Returns Data Chronology", footnotes=None):
-    """
-    Create a styled Excel file from table data
-    
-    Args:
-        table_data: 2D array of data (first row is headers)
-        title: Title for the Excel file
-        footnotes: Dictionary of footnotes
-        
-    Returns:
-        BytesIO object containing the Excel file
-    """
-    # Create workbook and sheet
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Chronology"
-    
-    if footnotes is None:
-        footnotes = {}
-    
-    # Format the table with the data and footnotes
-    format_excel_table(ws, table_data, title, footnotes)
-    
-    # Create a BytesIO object to save the workbook
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    return output

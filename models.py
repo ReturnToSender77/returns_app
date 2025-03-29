@@ -59,6 +59,9 @@ class FactivaArticle(db.Model):
     source = db.Column(db.String, nullable=True)
     content = db.Column(db.Text, nullable=True)
     
+    # Add cell_id to link articles to specific FactivaCell
+    cell_id = db.Column(db.Integer, db.ForeignKey('factiva_cells.id', ondelete='SET NULL'), nullable=True)
+    
     def __repr__(self):
         return f"<FactivaArticle(headline={self.headline}, author={self.author})>"
 
@@ -146,6 +149,14 @@ class TextColumn(Column):
     def __repr__(self):
         return f"<TextColumn(name={self.name})>"
 
+class FactivaColumn(Column):
+    __mapper_args__ = {
+        'polymorphic_identity': 'factivacolumn'
+    }
+    
+    def __repr__(self):
+        return f"<FactivaColumn(name={self.name})>"
+
 # CELL TABLES
 class BaseCell(db.Model):
     __tablename__ = 'base_cells'
@@ -194,3 +205,55 @@ class TextCell(BaseCell):
         'polymorphic_identity': 'text_cell',
         'confirm_deleted_rows': False
     }
+
+class FactivaCell(BaseCell):
+    __tablename__ = 'factiva_cells'
+    id = db.Column(db.Integer, db.ForeignKey('base_cells.id'), primary_key=True)
+    
+    # Date for which this cell holds articles
+    date_value = db.Column(db.DateTime, nullable=True)
+    
+    # Relationship to the articles associated with this cell
+    articles = db.relationship('FactivaArticle', backref='cell', lazy=True)
+    
+    # Store summary information for display purposes
+    article_count = db.Column(db.Integer, default=0)
+    
+    # Store a representative footnote for Excel export (only one footnote will be shown)
+    representative_footnote = db.Column(db.Text, nullable=True)
+    
+    __mapper_args__ = {
+        'polymorphic_identity': 'factiva_cell',
+        'confirm_deleted_rows': False
+    }
+    
+    @property
+    def display_text(self):
+        """Returns text to display in the cell"""
+        if self.article_count == 0:
+            return "No articles"
+        elif self.article_count == 1:
+            return "1 Article"
+        else:
+            return f"{self.article_count} Articles"
+    
+    def add_article(self, article):
+        """Add an article to this cell and update the count"""
+        article.cell_id = self.id
+        self.article_count += 1
+        
+    def set_representative_footnote(self):
+        """Set a representative footnote based on article information"""
+        if not self.articles:
+            self.representative_footnote = None
+            return
+            
+        sources = set()
+        for article in self.articles:
+            if article.source:
+                sources.add(article.source)
+                
+        if sources:
+            self.representative_footnote = f"Sources: {', '.join(sorted(sources))}"
+        else:
+            self.representative_footnote = None

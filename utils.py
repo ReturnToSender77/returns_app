@@ -1,5 +1,5 @@
 import pandas as pd
-from models import db, ReturnsTable, Column, DateColumn, TextColumn, NumberCell, DateCell, TextCell
+from models import db, ReturnsTable, Column, DateColumn, TextColumn, NumberCell, DateCell, TextCell, FactivaColumn, FactivaCell
 
 def extract_data_file(file, database) -> tuple[ReturnsTable, pd.DataFrame]:
     """Extract file data and store it in the database.
@@ -97,8 +97,23 @@ def convert_ReturnsTable_to_html(returns_table):
             has_acd = False
             row_cells = []
             for col in returns_table.columns:
-                cell = col.cells[i]
-                if cell.discriminator == "date_cell":
+                cell = col.cells[i] if i < len(col.cells) else None
+                
+                if cell is None:
+                    cell_html = "<td></td>"
+                elif isinstance(col, FactivaColumn) and isinstance(cell, FactivaCell):
+                    # Special handling for Factiva cells - show article count
+                    article_count = cell.article_count
+                    display_text = cell.display_text
+                    
+                    # Add metadata attributes for potential JavaScript interactions
+                    cell_html = (
+                        f"<td class='factiva-cell' data-cell-type='factiva' "
+                        f"data-cell-id='{cell.id}' data-article-count='{article_count}'>"
+                        f"{display_text}"
+                        "</td>"
+                    )
+                elif cell.discriminator == "date_cell":
                     if cell.acd == 1:
                         has_acd = True
                     cell_html = (

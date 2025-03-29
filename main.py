@@ -75,7 +75,7 @@ def drop_database_tables(app, database):
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, use_reloader=True)
-    drop_database_tables(app, db)  # Comment out or remove this
+    # drop_database_tables(app, db)  # Commented out to prevent data loss
 
 
 
