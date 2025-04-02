@@ -9,10 +9,8 @@ import re
 def convert_string_data(value):
     """
     Convert a string to the appropriate type (int, float, or string)
-    
     Args:
         value: The string value to convert
-
     Returns:
         The converted value as an int, float, or string
     """
@@ -194,6 +192,8 @@ def format_excel_table(worksheet, data, title="Returns Data Chronology", footnot
 
     # Add headers with spacing, skipping significance columns
     if data and len(data) > 0:
+        # Headers are already processed by the routes.py function, so we don't 
+        # need to modify them here. The headers already use simple names like "Event" instead of "Factiva - Headline"
         headers = data[0]
         output_col = 1  # Track the actual Excel column position
 
@@ -287,7 +287,7 @@ def format_excel_table(worksheet, data, title="Returns Data Chronology", footnot
     # Add footnotes at the bottom
     if all_footnotes:
         current_row += 2  # Add some space
-        footnote_heading = worksheet.cell(row=current_row, column=1, value="Footnotes:")
+        footnote_heading = worksheet.cell(row=current_row, column=1, value="Notes and Sources:")
         footnote_heading.font = Font(bold=True, name="Times New Roman")
         current_row += 1
 

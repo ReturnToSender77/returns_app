@@ -25,40 +25,40 @@ def create_app():
         for table in tables:
             print(f"Table ID: {table.id}, Name: {table.name}")  
         
-        # Migrate footnote columns if needed
-        migrate_footnote_columns(db)
+        # # Migrate footnote columns if needed
+        # migrate_footnote_columns(db)
 
     app.register_blueprint(main_blueprint)
     print("Application creation completed")  
     return app
 
-def migrate_footnote_columns(db):
-    """Add the footnote-related columns to the columns table if they don't exist"""
-    with db.engine.connect() as conn:
-        # Check if the columns already exist
-        inspector = db.inspect(db.engine)
-        column_names = [column['name'] for column in inspector.get_columns('columns')]
+# def migrate_footnote_columns(db):
+#     """Add the footnote-related columns to the columns table if they don't exist"""
+#     with db.engine.connect() as conn:
+#         # Check if the columns already exist
+#         inspector = db.inspect(db.engine)
+#         column_names = [column['name'] for column in inspector.get_columns('columns')]
         
-        changes_made = False
+#         changes_made = False
         
-        # Add header_footnote column if it doesn't exist
-        if 'header_footnote' not in column_names:
-            print("Adding header_footnote column to columns table...")
-            # Use text() to create an executable SQL statement
-            conn.execute(text('ALTER TABLE columns ADD COLUMN header_footnote TEXT'))
-            changes_made = True
+#         # Add header_footnote column if it doesn't exist
+#         if 'header_footnote' not in column_names:
+#             print("Adding header_footnote column to columns table...")
+#             # Use text() to create an executable SQL statement
+#             conn.execute(text('ALTER TABLE columns ADD COLUMN header_footnote TEXT'))
+#             changes_made = True
         
-        # Add cell_footnotes column if it doesn't exist
-        if 'cell_footnotes' not in column_names:
-            print("Adding cell_footnotes column to columns table...")
-            # SQLite doesn't directly support JSON type, but we can use TEXT
-            conn.execute(text('ALTER TABLE columns ADD COLUMN cell_footnotes TEXT'))
-            changes_made = True
+#         # Add cell_footnotes column if it doesn't exist
+#         if 'cell_footnotes' not in column_names:
+#             print("Adding cell_footnotes column to columns table...")
+#             # SQLite doesn't directly support JSON type, but we can use TEXT
+#             conn.execute(text('ALTER TABLE columns ADD COLUMN cell_footnotes TEXT'))
+#             changes_made = True
         
-        if changes_made:
-            print("Footnote columns migration completed.")
-        else:
-            print("Footnote columns already exist.")
+#         if changes_made:
+#             print("Footnote columns migration completed.")
+#         else:
+#             print("Footnote columns already exist.")
 
 def drop_database_tables(app, database):
     """ Drop all tables in the database; useful for development
@@ -75,7 +75,6 @@ def drop_database_tables(app, database):
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, use_reloader=True)
-    # drop_database_tables(app, db)  # Commented out to prevent data loss
-
+    drop_database_tables(app, db)
 
 
